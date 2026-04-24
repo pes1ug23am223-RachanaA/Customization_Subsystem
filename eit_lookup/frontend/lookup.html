@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lookup Customizer — HRMS</title>
+<link rel="stylesheet" href="../../form_flexfield/frontend/style.css">
+<style>
+.lookup-row td { vertical-align:middle; }
+.val-chip { display:inline-block; background:var(--purple-light); color:var(--purple); border-radius:10px; padding:2px 9px; font-size:11px; font-weight:600; margin:2px 3px 2px 0; }
+.emp-result { background:var(--gray-50); border:1px solid var(--border); border-radius:var(--radius); padding:10px 14px; margin-top:10px; font-size:13px; }
+.emp-result strong { display:block; font-size:14px; margin-bottom:6px; color:var(--gray-800); }
+.emp-field-row { display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid var(--gray-100); font-size:12px; }
+.emp-field-row:last-child { border-bottom:none; }
+.apply-btn { background:#6366f1; color:#fff; }
+.apply-btn:hover { background:#4f46e5; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="content">
+    <header class="topbar">
+      <div>
+        <h1>Lookup Customizer</h1>
+        <p class="subtext">Define reusable value sets and perform live employee data lookups</p>
+      </div>
+      <span class="badge badge-green" id="serverStatus">Connecting...</span>
+    </header>
+
+    <div class="int-banner">
+      Lookups are named value lists used in form dropdowns and flexfield segments. Define a lookup once
+      and reuse it across all forms and modules. The <strong>Employee Lookup</strong> panel below lets you
+      search live employee data from the database — useful for HR operations and audit.
+    </div>
+
+    <section class="stats">
+      <div class="card"><h3 id="lookupTotal">0</h3><p>Total Lookups</p></div>
+      <div class="card"><h3 id="lookupValuesCount">0</h3><p>Total Values</p></div>
+      <div class="card success"><h3>Shared</h3><p>Cross-Module</p></div>
+    </section>
+
+    <!-- Create Lookup -->
+    <div class="panel">
+      <div class="panel-head"><h2>Create New Lookup</h2></div>
+      <div class="inline-form">
+        <div>
+          <input type="text" id="lookupName" placeholder="Lookup Code (e.g. MARITAL_STATUS)" style="width:230px">
+          <div class="hint">Use UPPER_CASE convention</div>
+        </div>
+        <div>
+          <input type="text" id="lookupValues" placeholder="Values (comma-separated)" style="width:320px">
+          <div class="hint">e.g. Single,Married,Divorced</div>
+        </div>
+        <button onclick="createLookup()">Create Lookup</button>
+      </div>
+    </div>
+
+    <!-- Existing lookups -->
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Existing Lookups</h2>
+        <div style="display:flex;gap:10px;align-items:center">
+          <select id="valueFilterSel" onchange="renderTable()" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px">
+            <option value="">All Lookups</option>
+          </select>
+          <input type="text" id="newValueInput" placeholder="New value" style="width:140px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px">
+          <button class="btn-sm" onclick="addValue()">Add Value</button>
+        </div>
+      </div>
+      <table>
+        <thead><tr><th>#</th><th>Lookup Code</th><th>Values</th><th>Count</th><th>Action</th></tr></thead>
+        <tbody id="lookupTable"><tr><td colspan="5" class="empty-state">Loading...</td></tr></tbody>
+      </table>
+    </div>
+
+    <!-- Employee Data Lookup -->
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Employee Data Lookup</h2>
+        <span class="badge badge-blue">Live DB Search</span>
+      </div>
+      <p style="font-size:13px;color:var(--gray-500);margin-bottom:14px">
+        Search employees by name, ID, or department. Results come directly from the database.
+        Use the "Apply to Lookup" button to extract unique values into a reusable lookup list.
+      </p>
+      <div class="inline-form">
+        <input type="text" id="empSearchInput" placeholder="Search by name, ID, or department..." style="width:300px" oninput="searchEmployees()">
+        <select id="empSearchField" style="width:160px" onchange="searchEmployees()">
+          <option value="all">All Fields</option>
+          <option value="name">Name</option>
+          <option value="department">Department</option>
+          <option value="jobTitle">Job Title</option>
+          <option value="status">Status</option>
+        </select>
+      </div>
+      <div id="empResults"><p class="empty-state">Type above to search employees.</p></div>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="../../form_flexfield/frontend/nav.js"></script>
+<script>
+const API = 'http://localhost:8080';
+let lookups = [];
+let allEmployees = [];
+
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className='toast '+type; t.style.display='block';
+  clearTimeout(t._t); t._t = setTimeout(() => t.style.display='none', 3500);
+}
+
+function setStatus(ok) {
+  const el = document.getElementById('serverStatus');
+  el.textContent = ok ? 'Live (DB)' : 'Offline';
+  el.className = ok ? 'badge badge-green' : 'badge badge-red';
+}
+
+async function loadData() {
+  try {
+    const [lr, er] = await Promise.all([
+      fetch(`${API}/api/lookups`),
+      fetch(`${API}/api/employees`)
+    ]);
+    if (lr.ok) { lookups = await lr.json(); setStatus(true); }
+    if (er.ok) allEmployees = await er.json();
+  } catch {
+    lookups = []; allEmployees = [];
+    setStatus(false);
+  }
+  renderTable();
+  populateFilterSelect();
+}
+
+function renderTable() {
+  const tbody = document.getElementById('lookupTable');
+  const filterCode = document.getElementById('valueFilterSel').value;
+  const data = filterCode ? lookups.filter(l => (l.lookupCode || l.name) === filterCode) : lookups;
+
+  let totalVals = 0;
+  if (!data.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No lookups defined. Create one above.</td></tr>';
+  } else {
+    tbody.innerHTML = data.map((l, i) => {
+      const code = l.lookupCode || l.name;
+      const vals = Array.isArray(l.values) ? l.values : (l.lookupValues ? l.lookupValues.split(',') : []);
+      totalVals += vals.length;
+      const chipsHtml = vals.map(v => `<span class="val-chip">${v.trim()}</span>`).join('');
+      return `<tr class="lookup-row">
+        <td>${i+1}</td>
+        <td><strong>${code}</strong></td>
+        <td>${chipsHtml || '<span style="color:var(--gray-400)">No values</span>'}</td>
+        <td><span class="badge badge-purple">${vals.length}</span></td>
+        <td style="white-space:nowrap">
+          <button class="btn-sm apply-btn" onclick="applyToDropdownForm('${code}')">Use in Form</button>
+          <button class="btn-sm btn-danger danger" style="margin-left:4px" onclick="deleteLookup('${code}')">Delete</button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  document.getElementById('lookupTotal').innerText       = lookups.length;
+  document.getElementById('lookupValuesCount').innerText = lookups.reduce((s,l) => {
+    const v = Array.isArray(l.values) ? l.values : (l.lookupValues ? l.lookupValues.split(',') : []);
+    return s + v.length;
+  }, 0);
+}
+
+function populateFilterSelect() {
+  const sel = document.getElementById('valueFilterSel');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">All Lookups</option>' +
+    lookups.map(l => `<option value="${l.lookupCode || l.name}">${l.lookupCode || l.name}</option>`).join('');
+  if (current) sel.value = current;
+}
+
+async function createLookup() {
+  const code    = document.getElementById('lookupName').value.trim().toUpperCase();
+  const valStr  = document.getElementById('lookupValues').value.trim();
+
+  if (!code) { showToast('Enter a lookup code.', 'error'); return; }
+  if (!/^[A-Z0-9_]+$/.test(code)) { showToast('Use UPPER_CASE with underscores only.', 'error'); return; }
+  if (lookups.some(l => l.lookupCode === code)) { showToast(`Lookup "${code}" already exists.`, 'error'); return; }
+
+  const values = valStr ? valStr.split(',').map(v => v.trim()).filter(Boolean) : [];
+
+  try {
+    const res = await fetch(`${API}/api/lookups`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ lookupCode: code, values })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Create failed');
+    showToast(`Lookup "${code}" created with ${values.length} values.`);
+    document.getElementById('lookupName').value  = '';
+    document.getElementById('lookupValues').value = '';
+    await loadData();
+  } catch (err) {
+    showToast(err.message || 'Create failed.', 'error');
+  }
+}
+
+async function addValue() {
+  const code = document.getElementById('valueFilterSel').value;
+  const val  = document.getElementById('newValueInput').value.trim();
+  if (!code) { showToast('Select a lookup first.', 'error'); return; }
+  if (!val)  { showToast('Enter a value.', 'error'); return; }
+
+  const lookup = lookups.find(l => l.lookupCode === code);
+  const existing = lookup ? (Array.isArray(lookup.values) ? lookup.values : (lookup.lookupValues||'').split(',').map(v=>v.trim())) : [];
+  if (existing.map(v=>v.toLowerCase()).includes(val.toLowerCase())) {
+    showToast(`"${val}" already exists in ${code}.`, 'error'); return;
+  }
+
+  try {
+    const res = await fetch(`${API}/api/lookups/${code}/values`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ value: val })
+    });
+    if (!res.ok) throw new Error('Add failed');
+    showToast(`"${val}" added to ${code}.`);
+    document.getElementById('newValueInput').value = '';
+    await loadData();
+  } catch (err) {
+    showToast(err.message || 'Add value failed.', 'error');
+  }
+}
+
+async function deleteLookup(code) {
+  if (!confirm(`Delete lookup "${code}" and all its values?`)) return;
+  try {
+    const res = await fetch(`${API}/api/lookups/${code}`, { method:'DELETE' });
+    if (!res.ok) throw new Error('Delete failed');
+    showToast(`Lookup "${code}" deleted.`);
+    await loadData();
+  } catch (err) {
+    showToast(err.message || 'Delete failed.', 'error');
+  }
+}
+
+/* ── Apply lookup to form as dropdown ── */
+async function applyToDropdownForm(lookupCode) {
+  try {
+    const fRes = await fetch(`${API}/api/forms`);
+    const forms = await fRes.json();
+    if (!forms.length) { showToast('No forms available. Create a form first.', 'error'); return; }
+
+    const formName = prompt(
+      `Add "${lookupCode}" as a Dropdown field to which form?\n\n` +
+      forms.map((f,i) => `${i+1}. ${f.formName} (ID: ${f.formId})`).join('\n') +
+      '\n\nEnter form number:'
+    );
+    const idx = parseInt(formName) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= forms.length) { showToast('Invalid selection.', 'error'); return; }
+
+    const form = forms[idx];
+    const fieldName = prompt(`Enter field name for the dropdown (default: "${lookupCode}"):`);
+    const name = (fieldName || lookupCode).trim();
+
+    const res = await fetch(`${API}/api/forms/${form.formId}/fields`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ fieldName: name, fieldType: 'Select', lookupCode, isMandatory: false })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Failed');
+    showToast(`Dropdown "${name}" using "${lookupCode}" added to "${form.formName}".`);
+  } catch (err) {
+    showToast(err.message || 'Failed to apply lookup.', 'error');
+  }
+}
+
+/* ── Employee Search Lookup ── */
+function searchEmployees() {
+  const q     = document.getElementById('empSearchInput').value.trim().toLowerCase();
+  const field = document.getElementById('empSearchField').value;
+  const resEl = document.getElementById('empResults');
+
+  if (!q) {
+    resEl.innerHTML = '<p class="empty-state">Type above to search employees.</p>';
+    return;
+  }
+  if (!allEmployees.length) {
+    resEl.innerHTML = '<p class="empty-state">No employee data loaded. Ensure server is running.</p>';
+    return;
+  }
+
+  const results = allEmployees.filter(e => {
+    const fullName  = (e.fullName || e.name || '').toLowerCase();
+    const empId     = (e.employeeId || e.id || '').toLowerCase();
+    const dept      = (e.department || '').toLowerCase();
+    const jobTitle  = (e.jobTitle || e.position || '').toLowerCase();
+    const status    = (e.status || e.onboardingStage || '').toLowerCase();
+
+    switch(field) {
+      case 'name':       return fullName.includes(q) || empId.includes(q);
+      case 'department': return dept.includes(q);
+      case 'jobTitle':   return jobTitle.includes(q);
+      case 'status':     return status.includes(q);
+      default:           return fullName.includes(q) || empId.includes(q) || dept.includes(q) || jobTitle.includes(q) || status.includes(q);
+    }
+  });
+
+  if (!results.length) {
+    resEl.innerHTML = '<p class="empty-state">No employees found matching your search.</p>';
+    return;
+  }
+
+  // Extract unique departments for "Apply to Lookup" suggestion
+  const depts = [...new Set(results.map(e => e.department).filter(Boolean))];
+
+  resEl.innerHTML = `
+    <div style="font-size:12px;color:var(--gray-500);margin-bottom:10px">${results.length} result${results.length!==1?'s':''} found</div>
+    ${results.slice(0,20).map(e => `
+      <div class="emp-result">
+        <strong>${e.fullName || e.name || 'Unknown'} <span class="badge badge-gray" style="font-size:10px">${e.employeeId||e.id}</span></strong>
+        <div class="emp-field-row"><span>Job Title</span><span>${e.jobTitle||e.position||'—'}</span></div>
+        <div class="emp-field-row"><span>Department</span><span>${e.department||'—'}</span></div>
+        <div class="emp-field-row"><span>Status</span><span>${e.status||e.onboardingStage||'—'}</span></div>
+        ${e.email ? `<div class="emp-field-row"><span>Email</span><span>${e.email}</span></div>` : ''}
+      </div>`).join('')}
+    ${results.length > 20 ? `<p class="hint" style="margin-top:8px">Showing first 20 of ${results.length} results. Refine your search.</p>` : ''}
+    ${depts.length ? `
+      <div style="margin-top:14px;padding:12px;background:var(--primary-light);border-radius:var(--radius)">
+        <p style="font-size:12px;font-weight:600;color:var(--primary);margin-bottom:8px">Found ${depts.length} unique department${depts.length!==1?'s':''} in results:</p>
+        <div>${depts.map(d=>`<span class="val-chip">${d}</span>`).join('')}</div>
+        <button class="btn-sm apply-btn" style="margin-top:8px" onclick="extractToLookup(${JSON.stringify(depts)}, 'DEPARTMENT_SEARCH')">
+          Extract to Lookup
+        </button>
+      </div>` : ''}`;
+}
+
+async function extractToLookup(values, suggestedCode) {
+  const code = prompt(`Create/update lookup with these values.\nLookup code:`, suggestedCode);
+  if (!code) return;
+  const upperCode = code.trim().toUpperCase();
+
+  // Deduplicate with existing values if lookup exists
+  const existing = lookups.find(l => l.lookupCode === upperCode);
+  const existingVals = existing ? (Array.isArray(existing.values) ? existing.values : (existing.lookupValues||'').split(',').map(v=>v.trim())) : [];
+  const newVals = values.filter(v => !existingVals.map(e=>e.toLowerCase()).includes(v.toLowerCase()));
+
+  if (existing && newVals.length === 0) {
+    showToast(`All values already exist in "${upperCode}".`); return;
+  }
+
+  try {
+    if (existing) {
+      for (const v of newVals) {
+        await fetch(`${API}/api/lookups/${upperCode}/values`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ value: v })
+        });
+      }
+      showToast(`${newVals.length} new values added to "${upperCode}".`);
+    } else {
+      const res = await fetch(`${API}/api/lookups`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ lookupCode: upperCode, values })
+      });
+      if (!res.ok) throw new Error('Create failed');
+      showToast(`Lookup "${upperCode}" created with ${values.length} values.`);
+    }
+    await loadData();
+  } catch (err) {
+    showToast(err.message || 'Extract failed.', 'error');
+  }
+}
+
+loadData();
+</script>
+</body>
+</html>

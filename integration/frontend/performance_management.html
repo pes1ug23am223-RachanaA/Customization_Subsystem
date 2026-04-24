@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Performance Management — HRMS</title>
+<link rel="stylesheet" href="../../form_flexfield/frontend/style.css">
+<style>
+.perf-tabs { display:flex; gap:6px; margin-bottom:16px; flex-wrap:wrap; }
+.tab { padding:8px 16px; border-radius:7px; border:1px solid var(--border); cursor:pointer; font-size:13px; background:#fff; transition:.15s; font-weight:500; }
+.tab.active { background:var(--primary); color:#fff; border-color:var(--primary); }
+.tab:hover:not(.active) { background:var(--gray-100); }
+.perf-section { display:none; }
+.perf-section.active { display:block; }
+.action-card { background:white; border:1px solid var(--border); border-radius:var(--radius); padding:20px; margin-bottom:14px; }
+.action-card h3 { font-size:14px; font-weight:700; margin-bottom:6px; color:var(--gray-800); }
+.action-card p { font-size:13px; color:var(--gray-500); margin-bottom:14px; line-height:1.5; }
+.action-tag { display:inline-block; padding:2px 10px; border-radius:10px; font-size:11px; font-weight:600; float:right; }
+.tag-wf { background:var(--success-light); color:#15803d; }
+.tag-form { background:#dbeafe; color:#1d4ed8; }
+.metric-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:18px; }
+.metric { background:white; border-radius:var(--radius); padding:16px; box-shadow:var(--shadow-sm); border:1px solid var(--border); text-align:center; }
+.metric h3 { font-size:26px; font-weight:700; margin:0 0 4px; }
+.metric p { font-size:12px; color:var(--gray-500); margin:0; }
+.metric.blue h3 { color:var(--primary); }
+.metric.green h3 { color:var(--success); }
+.metric.purple h3 { color:#7c3aed; }
+.choice-group { display:flex; gap:10px; margin:10px 0; }
+.choice-btn { flex:1; padding:10px; border:2px solid var(--border); border-radius:8px; cursor:pointer; font-size:13px; font-weight:600; background:white; color:var(--gray-700); transition:.15s; text-align:center; }
+.choice-btn.selected { border-color:var(--primary); background:var(--primary-light); color:var(--primary); }
+.choice-btn:hover { border-color:var(--primary); color:var(--primary); }
+.predefined-list { margin:10px 0; }
+.predefined-opt { padding:8px 12px; border:1px solid var(--border); border-radius:7px; margin-bottom:6px; cursor:pointer; font-size:13px; }
+.predefined-opt:hover { background:var(--gray-50); border-color:var(--primary); }
+.predefined-opt.selected { background:var(--primary-light); border-color:var(--primary); }
+.predefined-opt strong { display:block; font-size:13px; }
+.predefined-opt span { font-size:11px; color:var(--gray-500); }
+.empty-row td { text-align:center; color:var(--gray-400); padding:20px; font-size:13px; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="content">
+    <header class="topbar">
+      <div>
+        <h1>Performance Management</h1>
+        <p class="subtext">Integrated via IPerformanceForCustomization — reads live data from hrms.db</p>
+      </div>
+      <span class="badge badge-green" id="serverStatus">Connecting...</span>
+    </header>
+
+    <div class="int-banner">
+      Integration uses <strong>IPerformanceForCustomization</strong> and <strong>IPerformanceSubsystem</strong>
+      interfaces. Data is read from <strong>hrms.db</strong> via <code>RealPerformanceIntegration.java</code>.
+      Endpoints: <code>/api/performance/*</code>
+    </div>
+
+    <div class="metric-grid">
+      <div class="metric blue"><h3 id="cycleCount">—</h3><p>Performance Cycles</p></div>
+      <div class="metric green"><h3 id="goalCount">—</h3><p>Goals in DB</p></div>
+      <div class="metric purple"><h3 id="appraisalCount">—</h3><p>Appraisals in DB</p></div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="perf-tabs">
+      <div class="tab active" onclick="showTab('cycles')">Cycles</div>
+      <div class="tab" onclick="showTab('goals')">Goals</div>
+      <div class="tab" onclick="showTab('appraisals')">Appraisals</div>
+      <div class="tab" onclick="showTab('feedback')">Feedback</div>
+      <div class="tab" onclick="showTab('kpis')">KPIs</div>
+      <div class="tab" onclick="showTab('actions')">Actions</div>
+      <div class="tab" onclick="showTab('config')">Config</div>
+    </div>
+
+    <!-- Cycles -->
+    <div class="perf-section active" id="tab-cycles">
+      <div class="panel">
+        <div class="panel-head"><h2>Performance Cycles</h2></div>
+        <table><thead><tr><th>#</th><th>Cycle Name</th><th>Status</th><th>Start</th><th>End</th></tr></thead>
+          <tbody id="cycleTable"><tr class="empty-row"><td colspan="5">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Goals -->
+    <div class="perf-section" id="tab-goals">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Goals</h2>
+          <select id="cycleFilter" onchange="loadGoals()" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px">
+            <option value="">All Cycles</option>
+          </select>
+        </div>
+        <table><thead><tr><th>#</th><th>Employee</th><th>Goal</th><th>Cycle</th><th>Target</th><th>Status</th></tr></thead>
+          <tbody id="goalTable"><tr class="empty-row"><td colspan="6">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Appraisals -->
+    <div class="perf-section" id="tab-appraisals">
+      <div class="panel">
+        <div class="panel-head"><h2>Appraisals</h2></div>
+        <table><thead><tr><th>#</th><th>ID</th><th>Employee</th><th>Period</th><th>Rating</th><th>Manager</th><th>Status</th></tr></thead>
+          <tbody id="appraisalTable"><tr class="empty-row"><td colspan="7">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Feedback -->
+    <div class="perf-section" id="tab-feedback">
+      <div class="panel">
+        <div class="panel-head"><h2>Feedback Records</h2></div>
+        <table><thead><tr><th>#</th><th>Employee</th><th>From</th><th>Score</th><th>Comments</th></tr></thead>
+          <tbody id="feedbackTable"><tr class="empty-row"><td colspan="5">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="perf-section" id="tab-kpis">
+      <div class="panel">
+        <div class="panel-head"><h2>KPIs</h2></div>
+        <table><thead><tr><th>#</th><th>Employee</th><th>KPI Name</th><th>Target</th><th>Actual</th><th>Score</th></tr></thead>
+          <tbody id="kpiTable"><tr class="empty-row"><td colspan="6">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Actions (Trigger Workflow + Create Form) -->
+    <div class="perf-section" id="tab-actions">
+      <!-- Trigger Appraisal Workflow -->
+      <div class="action-card">
+        <h3>Trigger Appraisal Workflow <span class="action-tag tag-wf">Workflow Integration</span></h3>
+        <p>
+          Start a performance appraisal workflow for an employee. Choose a predefined workflow template
+          or create a custom workflow. Integrated with Workflow Engine via IPerformanceIntegration.
+        </p>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Select Employee</label>
+            <select id="appraisalEmpSelect"><option value="">-- Choose Employee --</option></select>
+          </div>
+          <div class="form-group">
+            <label>Appraisal Period</label>
+            <input type="text" id="appraisalPeriod" placeholder="e.g., Q2-2026">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Workflow Type</label>
+          <div class="choice-group">
+            <button class="choice-btn selected" id="wfChoiceCustom" onclick="selectWfChoice('custom')">Custom Workflow</button>
+            <button class="choice-btn" id="wfChoicePredefined" onclick="selectWfChoice('predefined')">Use Predefined Template</button>
+          </div>
+        </div>
+        <div id="predefinedWfSection" style="display:none">
+          <label style="font-size:12px;font-weight:600;color:var(--gray-600);display:block;margin-bottom:6px">Select Template</label>
+          <div class="predefined-list">
+            <div class="predefined-opt selected" data-template="standard_appraisal" onclick="selectWfTemplate(this)">
+              <strong>Standard Performance Appraisal (6 steps)</strong>
+              <span>Self Assessment → Manager Review → Peer Feedback → HR Evaluation → Final Rating → Acknowledgement</span>
+            </div>
+            <div class="predefined-opt" data-template="fast_track" onclick="selectWfTemplate(this)">
+              <strong>Fast Track Review (3 steps)</strong>
+              <span>Self Assessment → Manager Review → Confirmation</span>
+            </div>
+            <div class="predefined-opt" data-template="probation_review" onclick="selectWfTemplate(this)">
+              <strong>Probation Review (4 steps)</strong>
+              <span>Self Assessment → Line Manager → HR Review → Decision</span>
+            </div>
+          </div>
+        </div>
+        <button onclick="triggerAppraisalWorkflow()">Start Appraisal Workflow</button>
+      </div>
+
+      <!-- Create Performance Form -->
+      <div class="action-card">
+        <h3>Create Performance Form <span class="action-tag tag-form">Form Designer Integration</span></h3>
+        <p>
+          Create an appraisal form linked to a performance cycle. Choose a predefined form template
+          with standard fields, or start from scratch in the Form Designer.
+        </p>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Form Name</label>
+            <input type="text" id="perfFormName" placeholder="e.g. Q1-2026 Appraisal Form">
+          </div>
+          <div class="form-group">
+            <label>Linked Cycle</label>
+            <select id="formCycleSelect"><option value="">-- Select Cycle --</option></select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Form Type</label>
+          <div class="choice-group">
+            <button class="choice-btn selected" id="fmChoiceCustom" onclick="selectFmChoice('custom')">Custom Form</button>
+            <button class="choice-btn" id="fmChoicePredefined" onclick="selectFmChoice('predefined')">Use Predefined Template</button>
+          </div>
+        </div>
+        <div id="predefinedFmSection" style="display:none">
+          <label style="font-size:12px;font-weight:600;color:var(--gray-600);display:block;margin-bottom:6px">Select Template</label>
+          <div class="predefined-list">
+            <div class="predefined-opt selected" data-ftemplate="standard_appraisal" onclick="selectFmTemplate(this)">
+              <strong>Standard Appraisal Form (8 fields)</strong>
+              <span>Self Rating, Manager Rating, Goals Achieved, Strengths, Areas to Improve, Training Needs, Overall Rating, Comments</span>
+            </div>
+            <div class="predefined-opt" data-ftemplate="kpi_review" onclick="selectFmTemplate(this)">
+              <strong>KPI Review Form (5 fields)</strong>
+              <span>KPI Name, Target, Actual Achievement, Score, Manager Remarks</span>
+            </div>
+            <div class="predefined-opt" data-ftemplate="probation_form" onclick="selectFmTemplate(this)">
+              <strong>Probation Completion Form (6 fields)</strong>
+              <span>Employee Name, Probation Period, Performance Rating, Recommendation, Manager Signature, HR Notes</span>
+            </div>
+          </div>
+        </div>
+        <button onclick="createPerformanceForm()" style="background:var(--primary)">Create Form</button>
+      </div>
+    </div>
+
+    <!-- Config -->
+    <div class="perf-section" id="tab-config">
+      <div class="panel">
+        <div class="panel-head"><h2>Integration Configuration</h2></div>
+        <div id="runtimeChecks" style="font-size:13px;color:var(--gray-600)">Loading runtime checks...</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="../../form_flexfield/frontend/nav.js"></script>
+<script>
+const API = 'http://localhost:8080';
+let wfChoice = 'custom', fmChoice = 'custom';
+let selectedWfTemplate = 'standard_appraisal', selectedFmTemplate = 'standard_appraisal';
+
+const PREDEFINED_WF_STEPS = {
+  standard_appraisal: [
+    { stepName:'Self Assessment',       assignee:'Employee',         escalationHours:48 },
+    { stepName:'Manager Review',        assignee:'Reporting Manager',escalationHours:72 },
+    { stepName:'Peer Feedback',         assignee:'Peers',            escalationHours:48 },
+    { stepName:'HR Evaluation',         assignee:'HR',               escalationHours:48 },
+    { stepName:'Final Rating Approval', assignee:'Senior Manager',   escalationHours:72 },
+    { stepName:'Employee Acknowledgement',assignee:'Employee',       escalationHours:24 },
+  ],
+  fast_track: [
+    { stepName:'Self Assessment',  assignee:'Employee', escalationHours:24 },
+    { stepName:'Manager Review',   assignee:'Manager',  escalationHours:48 },
+    { stepName:'Confirmation',     assignee:'HR',       escalationHours:24 },
+  ],
+  probation_review: [
+    { stepName:'Self Assessment',  assignee:'Employee',      escalationHours:48 },
+    { stepName:'Line Manager',     assignee:'Line Manager',  escalationHours:48 },
+    { stepName:'HR Review',        assignee:'HR Admin',      escalationHours:24 },
+    { stepName:'Decision',         assignee:'Senior Manager',escalationHours:48 },
+  ],
+};
+
+const PREDEFINED_FORM_FIELDS = {
+  standard_appraisal: [
+    { fieldName:'Self Rating',        fieldType:'Number',  isMandatory:true  },
+    { fieldName:'Manager Rating',     fieldType:'Number',  isMandatory:true  },
+    { fieldName:'Goals Achieved',     fieldType:'Textarea',isMandatory:true  },
+    { fieldName:'Strengths',          fieldType:'Textarea',isMandatory:false },
+    { fieldName:'Areas to Improve',   fieldType:'Textarea',isMandatory:false },
+    { fieldName:'Training Needs',     fieldType:'Textarea',isMandatory:false },
+    { fieldName:'Overall Rating',     fieldType:'Select',  isMandatory:true  },
+    { fieldName:'Comments',           fieldType:'Textarea',isMandatory:false },
+  ],
+  kpi_review: [
+    { fieldName:'KPI Name',           fieldType:'Text',    isMandatory:true  },
+    { fieldName:'Target',             fieldType:'Text',    isMandatory:true  },
+    { fieldName:'Actual Achievement', fieldType:'Text',    isMandatory:true  },
+    { fieldName:'Score',              fieldType:'Number',  isMandatory:true  },
+    { fieldName:'Manager Remarks',    fieldType:'Textarea',isMandatory:false },
+  ],
+  probation_form: [
+    { fieldName:'Employee Name',      fieldType:'Text',    isMandatory:true  },
+    { fieldName:'Probation Period',   fieldType:'Text',    isMandatory:true  },
+    { fieldName:'Performance Rating', fieldType:'Select',  isMandatory:true  },
+    { fieldName:'Recommendation',     fieldType:'Select',  isMandatory:true  },
+    { fieldName:'Manager Notes',      fieldType:'Textarea',isMandatory:false },
+    { fieldName:'HR Notes',           fieldType:'Textarea',isMandatory:false },
+  ],
+};
+
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className='toast '+type; t.style.display='block';
+  clearTimeout(t._t); t._t = setTimeout(() => t.style.display='none', 4000);
+}
+function setStatus(ok) {
+  const el = document.getElementById('serverStatus');
+  el.textContent = ok ? 'Live (DB)' : 'Offline';
+  el.className = ok ? 'badge badge-green' : 'badge badge-red';
+}
+function showTab(name) {
+  document.querySelectorAll('.perf-section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  event.target.classList.add('active');
+}
+
+/* ── Workflow choice ── */
+function selectWfChoice(choice) {
+  wfChoice = choice;
+  document.getElementById('wfChoiceCustom').className = 'choice-btn' + (choice==='custom'?' selected':'');
+  document.getElementById('wfChoicePredefined').className = 'choice-btn' + (choice==='predefined'?' selected':'');
+  document.getElementById('predefinedWfSection').style.display = choice==='predefined' ? 'block' : 'none';
+}
+function selectWfTemplate(el) {
+  document.querySelectorAll('.predefined-list .predefined-opt').forEach(e => e.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedWfTemplate = el.dataset.template;
+}
+
+/* ── Form choice ── */
+function selectFmChoice(choice) {
+  fmChoice = choice;
+  document.getElementById('fmChoiceCustom').className = 'choice-btn' + (choice==='custom'?' selected':'');
+  document.getElementById('fmChoicePredefined').className = 'choice-btn' + (choice==='predefined'?' selected':'');
+  document.getElementById('predefinedFmSection').style.display = choice==='predefined' ? 'block' : 'none';
+}
+function selectFmTemplate(el) {
+  document.querySelectorAll('#predefinedFmSection .predefined-opt').forEach(e => e.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedFmTemplate = el.dataset.ftemplate;
+}
+
+/* ── Load data ── */
+async function loadAll() {
+  try {
+    const [cyclesRes, goalsRes, appraisalsRes, feedbackRes, kpisRes, checksRes] = await Promise.all([
+      fetch(`${API}/api/performance/cycles`),
+      fetch(`${API}/api/performance/goals`),
+      fetch(`${API}/api/performance/appraisals`),
+      fetch(`${API}/api/performance/feedback`),
+      fetch(`${API}/api/performance/kpis`),
+      fetch(`${API}/api/checks`),
+    ]);
+
+    const cycles     = cyclesRes.ok     ? await cyclesRes.json()     : [];
+    const goals      = goalsRes.ok      ? await goalsRes.json()      : [];
+    const appraisals = appraisalsRes.ok ? await appraisalsRes.json() : [];
+    const feedback   = feedbackRes.ok   ? await feedbackRes.json()   : [];
+    const kpis       = kpisRes.ok       ? await kpisRes.json()       : [];
+    const checks     = checksRes.ok     ? await checksRes.json()     : {};
+
+    setStatus(true);
+
+    document.getElementById('cycleCount').textContent     = cycles.length;
+    document.getElementById('goalCount').textContent      = goals.length;
+    document.getElementById('appraisalCount').textContent = appraisals.length;
+
+    // Cycles table
+    document.getElementById('cycleTable').innerHTML = cycles.length
+      ? cycles.map((c,i) => `<tr><td>${i+1}</td><td><strong>${c.cycleName}</strong></td><td><span class="badge badge-green">${c.cycleStatus||'Active'}</span></td><td>${c.startDate||'—'}</td><td>${c.endDate||'—'}</td></tr>`).join('')
+      : '<tr class="empty-row"><td colspan="5">No cycles in database. Add data via PM subsystem.</td></tr>';
+
+    // Populate filters
+    const sel = document.getElementById('cycleFilter');
+    sel.innerHTML = '<option value="">All Cycles</option>' +
+      cycles.map(c => `<option>${c.cycleName}</option>`).join('');
+
+    // Goals table
+    document.getElementById('goalTable').innerHTML = goals.length
+      ? goals.map((g,i) => `<tr><td>${i+1}</td><td>${g.employeeId||'—'}</td><td>${g.goalDescription||g.goal||'—'}</td><td>${g.cycleName||'—'}</td><td>${g.targetValue||'—'}</td><td><span class="badge badge-blue">${g.status||'In Progress'}</span></td></tr>`).join('')
+      : '<tr class="empty-row"><td colspan="6">No goals in database.</td></tr>';
+
+    // Appraisals table
+    document.getElementById('appraisalTable').innerHTML = appraisals.length
+      ? appraisals.map((a,i) => `<tr><td>${i+1}</td><td>${a.appraisalId||'—'}</td><td>${a.employeeId||'—'}</td><td>${a.period||a.cycleName||'—'}</td><td>${a.rating||'—'}</td><td>${a.managerName||a.managerId||'—'}</td><td><span class="badge badge-gray">${a.status||'Pending'}</span></td></tr>`).join('')
+      : '<tr class="empty-row"><td colspan="7">No appraisals yet.</td></tr>';
+
+    // Feedback table
+    document.getElementById('feedbackTable').innerHTML = feedback.length
+      ? feedback.map((f,i) => `<tr><td>${i+1}</td><td>${f.employeeId||'—'}</td><td>${f.fromId||f.reviewer||'—'}</td><td>${f.score||'—'}</td><td>${f.comments||'—'}</td></tr>`).join('')
+      : '<tr class="empty-row"><td colspan="5">No feedback records.</td></tr>';
+
+    // KPI table
+    document.getElementById('kpiTable').innerHTML = kpis.length
+      ? kpis.map((k,i) => `<tr><td>${i+1}</td><td>${k.employeeId||'—'}</td><td>${k.kpiName||'—'}</td><td>${k.target||'—'}</td><td>${k.actual||'—'}</td><td>${k.score||'—'}</td></tr>`).join('')
+      : '<tr class="empty-row"><td colspan="6">No KPI records.</td></tr>';
+
+    // Runtime checks
+    const checktxt = checks.performanceCounts
+      ? `<strong>Database Status:</strong> Cycles: ${checks.performanceCounts.cycles}, Goals: ${checks.performanceCounts.goals}, Appraisals: ${checks.performanceCounts.appraisals}, Feedback: ${checks.performanceCounts.feedback}, KPIs: ${checks.performanceCounts.kpis}<br>${checks.integrationStatus||''}`
+      : `<span class="badge badge-gray">Server offline — could not load runtime checks.</span>`;
+    document.getElementById('runtimeChecks').innerHTML = checktxt;
+
+    // Populate appraisal employee dropdown
+    await populateAppraisalDropdowns(cycles);
+
+  } catch (err) {
+    setStatus(false);
+    ['cycleTable','goalTable','appraisalTable','feedbackTable','kpiTable'].forEach(id => {
+      document.getElementById(id).innerHTML = `<tr class="empty-row"><td colspan="7">Server offline — run ApiServer.java first.</td></tr>`;
+    });
+  }
+}
+
+async function loadGoals() {
+  const cycle = document.getElementById('cycleFilter').value;
+  try {
+    const res = await fetch(`${API}/api/performance/goals${cycle ? '?cycle='+encodeURIComponent(cycle) : ''}`);
+    const goals = res.ok ? await res.json() : [];
+    document.getElementById('goalTable').innerHTML = goals.length
+      ? goals.map((g,i) => `<tr><td>${i+1}</td><td>${g.employeeId||'—'}</td><td>${g.goalDescription||g.goal||'—'}</td><td>${g.cycleName||'—'}</td><td>${g.targetValue||'—'}</td><td><span class="badge badge-blue">${g.status||'In Progress'}</span></td></tr>`).join('')
+      : '<tr class="empty-row"><td colspan="6">No goals found.</td></tr>';
+  } catch {}
+}
+
+async function populateAppraisalDropdowns(cycles) {
+  try {
+    const res = await fetch(`${API}/api/employees`);
+    const emps = await res.json();
+    const sel = document.getElementById('appraisalEmpSelect');
+    sel.innerHTML = '<option value="">-- Choose Employee --</option>' +
+      emps.map(e => `<option value="${e.employeeId||e.id}">${e.fullName||e.name} (${e.employeeId||e.id})</option>`).join('');
+
+    const cycSel = document.getElementById('formCycleSelect');
+    cycSel.innerHTML = '<option value="">-- Select Cycle --</option>' +
+      (cycles||[]).map(c => `<option value="${c.cycleName}">${c.cycleName}</option>`).join('');
+  } catch {}
+}
+
+/* ── Trigger workflow ── */
+async function triggerAppraisalWorkflow() {
+  const empId  = document.getElementById('appraisalEmpSelect').value;
+  const period = document.getElementById('appraisalPeriod').value.trim();
+
+  if (!empId || !period) {
+    showToast('Select an employee and enter appraisal period.', 'error'); return;
+  }
+
+  const wfName = `Appraisal Review - ${empId} (${period})`;
+
+  try {
+    // Create workflow
+    const wfRes = await fetch(`${API}/api/workflows/create`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ name: wfName, assignedTo: empId })
+    });
+    const wfData = await wfRes.json();
+    if (!wfRes.ok) throw new Error(wfData.message || 'Workflow creation failed');
+    const wfId = wfData.workflowId || wfData.id;
+
+    // Add steps if predefined
+    if (wfChoice === 'predefined' && PREDEFINED_WF_STEPS[selectedWfTemplate]) {
+      const steps = PREDEFINED_WF_STEPS[selectedWfTemplate];
+      for (const step of steps) {
+        await fetch(`${API}/api/workflows/addstep`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ workflowId: wfId, ...step })
+        }).catch(() => {});
+      }
+      showToast(`Appraisal workflow created with ${steps.length} predefined steps for ${empId}.`);
+    } else {
+      showToast(`Custom appraisal workflow created for ${empId} — add steps in Workflow Engine.`);
+    }
+
+    document.getElementById('appraisalEmpSelect').value = '';
+    document.getElementById('appraisalPeriod').value    = '';
+  } catch (err) {
+    showToast(err.message || 'Failed to create workflow.', 'error');
+  }
+}
+
+/* ── Create performance form ── */
+async function createPerformanceForm() {
+  const formName = document.getElementById('perfFormName').value.trim();
+  const cycle    = document.getElementById('formCycleSelect').value;
+
+  if (!formName) { showToast('Enter a form name.', 'error'); return; }
+
+  try {
+    // Create form
+    const res = await fetch(`${API}/api/forms/create`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ formName, layoutType:'Grid', linkedCycle: cycle, description: `Appraisal form for ${cycle}` })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Form creation failed');
+    const formId = data.formId || data.id;
+
+    // Add predefined fields if chosen
+    if (fmChoice === 'predefined' && PREDEFINED_FORM_FIELDS[selectedFmTemplate]) {
+      const fields = PREDEFINED_FORM_FIELDS[selectedFmTemplate];
+      for (const field of fields) {
+        await fetch(`${API}/api/forms/${formId}/fields`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify(field)
+        }).catch(() => {});
+      }
+      showToast(`Form "${formName}" created with ${fields.length} predefined fields.`);
+    } else {
+      showToast(`Form "${formName}" created. Add fields in Form Designer.`);
+    }
+
+    document.getElementById('perfFormName').value = '';
+    document.getElementById('formCycleSelect').value = '';
+  } catch (err) {
+    showToast(err.message || 'Failed to create form.', 'error');
+  }
+}
+
+loadAll();
+</script>
+</body>
+</html>

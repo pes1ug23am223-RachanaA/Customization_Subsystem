@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Form Designer — HRMS</title>
+<link rel="stylesheet" href="style.css">
+<style>
+.field-row td:last-child { white-space:nowrap; }
+.field-del { background:var(--danger); color:#fff; padding:4px 10px; font-size:11px; border-radius:5px; cursor:pointer; border:none; }
+.field-del:hover { background:#b91c1c; }
+.open-form-btn { background:#6366f1; color:#fff; padding:5px 12px; font-size:12px; border-radius:6px; cursor:pointer; border:none; }
+.open-form-btn:hover { background:#4f46e5; }
+.form-panel { display:none; margin-top:0; }
+.form-panel.active { display:block; }
+.form-view-header {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:14px 20px; background:var(--gray-800); color:#fff; border-radius:var(--radius) var(--radius) 0 0;
+}
+.form-view-header h3 { font-size:14px; font-weight:600; }
+.form-view-body { padding:20px; background:white; border:1px solid var(--border); border-top:none; border-radius:0 0 var(--radius) var(--radius); }
+.form-field-render { margin-bottom:16px; }
+.form-field-render label { font-weight:600; font-size:13px; margin-bottom:5px; display:block; }
+.req-star { color:var(--danger); margin-left:2px; }
+.form-actions { display:flex; gap:10px; margin-top:20px; padding-top:16px; border-top:1px solid var(--border); }
+.close-form-btn { background:var(--gray-200); color:var(--gray-700); }
+.close-form-btn:hover { background:var(--gray-300); }
+.submit-form-btn { background:var(--success); }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="content">
+    <header class="topbar">
+      <div>
+        <h1>Form Designer</h1>
+        <p class="subtext">Build dynamic HRMS forms with custom and flex fields</p>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <span class="badge badge-green" id="serverStatus">Connecting...</span>
+        <button onclick="openFormModal()">+ New Form</button>
+      </div>
+    </header>
+
+    <div class="int-banner">
+      Forms created here are reusable across modules. Flexfields from the Flexfield Manager
+      can be embedded into any form. Field names must be unique within a form.
+    </div>
+
+    <section class="stats">
+      <div class="card"><h3 id="formCount">0</h3><p>Total Forms</p></div>
+      <div class="card"><h3 id="fieldCount">0</h3><p>Total Fields</p></div>
+      <div class="card success"><h3>Connected</h3><p>Flexfields Enabled</p></div>
+    </section>
+
+    <!-- Form list + Field list -->
+    <section class="grid-2">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Forms</h2>
+          <button class="btn-danger btn-sm" onclick="deleteForm()">Delete Selected</button>
+        </div>
+        <table>
+          <thead><tr><th>ID</th><th>Name</th><th>Layout</th><th>Action</th></tr></thead>
+          <tbody id="formTable"><tr><td colspan="4" class="empty-state">Loading...</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Fields <span id="formNameLabel" style="font-weight:400;color:var(--gray-500);font-size:13px;margin-left:6px"></span></h2>
+          <div class="btn-group">
+            <button class="btn-sm" onclick="openFieldModal()">+ Add Field</button>
+            <button class="btn-sm" style="background:#6366f1" onclick="openFlexModal()">+ Add Flexfield</button>
+          </div>
+        </div>
+        <table>
+          <thead><tr><th>Name</th><th>Type</th><th>Req</th><th>Action</th></tr></thead>
+          <tbody id="fieldTable"><tr><td colspan="4" class="empty-state">Select a form</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Inline Form View (no redirect) -->
+    <div id="formViewPanel" class="form-panel">
+      <div class="form-view-header">
+        <h3 id="formViewTitle">Form Preview</h3>
+        <button class="close-form-btn btn-sm" onclick="closeFormView()">Close</button>
+      </div>
+      <div class="form-view-body" id="formViewBody"></div>
+    </div>
+
+    <!-- Live Preview -->
+    <section class="panel preview-panel">
+      <div class="panel-head"><h2>Live Preview</h2><span class="badge badge-gray" id="previewFormName">No form selected</span></div>
+      <div id="previewArea"><p class="empty-state">Select a form to preview its fields.</p></div>
+    </section>
+  </main>
+</div>
+
+<!-- Create Form Modal -->
+<div class="modal" id="formModal">
+  <div class="modal-box">
+    <h2>Create New Form</h2>
+    <div class="form-group">
+      <label>Form Name</label>
+      <input type="text" id="formName" placeholder="e.g. Leave Request Form">
+    </div>
+    <div class="form-group">
+      <label>Layout</label>
+      <select id="layoutType">
+        <option value="Grid">Grid</option>
+        <option value="Single Page">Single Page</option>
+        <option value="Tabbed">Tabbed</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeFormModal()">Cancel</button>
+      <button onclick="saveForm()">Create Form</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Field Modal -->
+<div class="modal" id="fieldModal">
+  <div class="modal-box">
+    <h2>Add Field</h2>
+    <div class="form-group">
+      <label>Field Name</label>
+      <input type="text" id="fieldName" placeholder="e.g. Employee Name">
+      <div class="hint">Must be unique within this form</div>
+    </div>
+    <div class="form-group">
+      <label>Field Type</label>
+      <select id="fieldType">
+        <option value="Text">Text</option>
+        <option value="Number">Number</option>
+        <option value="Date">Date</option>
+        <option value="Dropdown">Dropdown (uses Lookup values)</option>
+        <option value="Textarea">Textarea</option>
+        <option value="Boolean">Checkbox</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label style="display:flex;align-items:center;gap:8px;font-weight:normal">
+        <input type="checkbox" id="requiredField" style="width:auto;margin:0"> Required field
+      </label>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeFieldModal()">Cancel</button>
+      <button onclick="saveField()">Add Field</button>
+    </div>
+  </div>
+</div>
+
+<!-- Attach Flexfield Modal -->
+<div class="modal" id="flexModal">
+  <div class="modal-box">
+    <h2>Attach Flexfield</h2>
+    <div class="form-group">
+      <label>Select Flexfield</label>
+      <select id="flexSelect"><option>Loading...</option></select>
+    </div>
+    <div class="int-banner" style="margin-top:8px">
+      Flexfields are predefined structured segments. They appear as composite fields in the form.
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeFlexModal()">Cancel</button>
+      <button onclick="attachFlexfield()">Attach</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="nav.js"></script>
+<script src="forms.js"></script>
+</body>
+</html>

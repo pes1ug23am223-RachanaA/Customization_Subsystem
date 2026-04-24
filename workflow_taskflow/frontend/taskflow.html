@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Task Flow Builder — HRMS</title>
+<style>
+:root {
+  --primary:#2563eb; --primary-dark:#1d4ed8; --primary-light:#eff6ff;
+  --teal:#0d9488; --teal-light:#f0fdfa; --teal-dark:#0f766e;
+  --success:#16a34a; --danger:#dc2626; --warning:#d97706;
+  --gray-50:#f9fafb; --gray-100:#f3f4f6; --gray-200:#e5e7eb;
+  --gray-300:#d1d5db; --gray-400:#9ca3af; --gray-500:#6b7280;
+  --gray-600:#4b5563; --gray-700:#374151; --gray-800:#1f2937;
+  --border:#e5e7eb; --radius:10px; --shadow:0 2px 8px rgba(0,0,0,.08);
+}
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',system-ui,sans-serif}
+body{background:var(--gray-100);display:flex;height:100vh;overflow:hidden}
+
+/* Sidebar — TEAL theme to differentiate from Workflow (blue) */
+.sidebar{width:240px;background:#134e4a;color:white;padding:20px 0;flex-shrink:0;display:flex;flex-direction:column;overflow-y:auto}
+.sidebar-logo{padding:0 20px 20px;border-bottom:1px solid #1a5c58;margin-bottom:8px}
+.sidebar-logo h2{font-size:15px;font-weight:700;color:#fff}
+.sidebar-logo span{font-size:11px;color:#5eead4;display:block;margin-top:2px}
+.sidebar-logo .module-tag{display:inline-block;background:#0d9488;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-top:4px}
+.sidebar-section{padding:14px 20px 4px;font-size:10px;font-weight:700;color:#5eead4;text-transform:uppercase;letter-spacing:1px}
+.sidebar a{display:flex;align-items:center;gap:8px;text-decoration:none;color:#99f6e4;padding:9px 20px;border-left:3px solid transparent;font-size:13px;transition:.15s}
+.sidebar a:hover{background:#1a5c58;color:#fff}
+.sidebar a.active{background:#1a5c58;color:#fff;border-left-color:var(--teal)}
+.module-diff{background:#0f766e;padding:8px 20px;margin:8px 0;font-size:11px;color:#ccfbf1;font-style:italic}
+
+/* Layout */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{background:#fff;border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.topbar-left h2{font-size:16px;font-weight:700;color:var(--gray-800)}
+.topbar-left p{font-size:11px;color:var(--gray-400);margin-top:1px}
+.topbar-right{display:flex;gap:8px;align-items:center}
+.badge{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
+.badge-teal{background:#ccfbf1;color:#0f766e}
+.badge-green{background:#dcfce7;color:#15803d}
+.badge-gray{background:var(--gray-100);color:var(--gray-500)}
+.badge-blue{background:#dbeafe;color:#1d4ed8}
+
+/* Body */
+.body{flex:1;display:flex;overflow:hidden}
+
+/* Left panel */
+.panel-left{width:300px;background:#fff;border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.phead{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.phead h3{font-size:13px;font-weight:600;color:var(--gray-800)}
+.btn{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;transition:.15s}
+.btn-teal{background:var(--teal);color:#fff}.btn-teal:hover{background:var(--teal-dark)}
+.btn-success{background:var(--success);color:#fff}.btn-success:hover{background:#15803d}
+.btn-danger{background:#fee2e2;color:var(--danger)}.btn-danger:hover{background:#fecaca}
+.btn-ghost{background:var(--gray-100);color:var(--gray-700)}.btn-ghost:hover{background:var(--gray-200)}
+.btn-sm{padding:4px 9px;font-size:11px}
+.search-box{padding:8px 12px;border-bottom:1px solid var(--border)}
+.search-box input{width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;outline:none}
+.search-box input:focus{border-color:var(--teal)}
+.tf-list{overflow-y:auto;flex:1}
+.tf-item{padding:11px 14px;border-bottom:1px solid var(--gray-100);cursor:pointer;transition:background .1s}
+.tf-item:hover{background:var(--gray-50)}
+.tf-item.selected{background:var(--teal-light);border-left:3px solid var(--teal)}
+.tf-item-name{font-size:13px;font-weight:600;color:var(--gray-800)}
+.tf-item-meta{font-size:11px;color:var(--gray-400);margin-top:2px;display:flex;gap:6px}
+
+/* Center */
+.panel-center{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--gray-100)}
+.center-head{background:#fff;border-bottom:1px solid var(--border);padding:12px 18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.center-head h3{font-size:14px;font-weight:600;color:var(--gray-800)}
+.center-actions{display:flex;gap:6px;flex-wrap:wrap}
+.canvas{flex:1;overflow-y:auto;padding:18px}
+
+/* Window flow */
+.window-flow{display:flex;align-items:flex-start;flex-wrap:wrap;gap:0;margin-bottom:18px}
+.window-box{background:#fff;border:2px solid var(--border);border-radius:8px;padding:12px 14px;min-width:120px;text-align:center;cursor:pointer;transition:all .15s;position:relative;margin:8px 0}
+.window-box:hover{border-color:var(--teal);box-shadow:0 2px 8px rgba(13,148,136,.15)}
+.window-box.selected-win{border-color:var(--teal);background:var(--teal-light)}
+.window-box.completed{border-color:var(--success);background:#f0fdf4}
+.window-box.active-win{border-color:var(--warning);background:#fffbeb}
+.window-num{position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:var(--teal);color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 7px}
+.window-num.done{background:var(--success)}
+.window-num.active{background:var(--warning)}
+.window-name{font-size:12px;font-weight:600;color:var(--gray-800);margin-top:4px}
+.window-type{font-size:10px;color:var(--gray-400);margin-top:2px}
+.window-arrow{font-size:18px;color:var(--gray-400);padding:0 6px;margin-top:20px}
+.window-remove{position:absolute;top:-6px;right:-6px;width:18px;height:18px;background:var(--danger);color:#fff;border-radius:50%;font-size:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:0;transition:opacity .15s;border:none;padding:0}
+.window-box:hover .window-remove{opacity:1}
+
+/* Table */
+.win-tbl{width:100%;border-collapse:collapse;background:#fff;border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
+.win-tbl th{background:var(--gray-50);padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid var(--border)}
+.win-tbl td{padding:10px 12px;font-size:12px;color:var(--gray-700);border-top:1px solid var(--gray-100)}
+.win-tbl tr:hover td{background:var(--gray-50)}
+
+/* Simulation panel */
+.sim-panel{background:#fff;border-radius:var(--radius);padding:16px;margin-top:14px;box-shadow:var(--shadow);border:1px solid var(--border)}
+.sim-panel h4{font-size:13px;font-weight:700;color:var(--gray-800);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.sim-progress{display:flex;align-items:center;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.sim-field{margin-bottom:12px}
+.sim-field label{font-size:12px;font-weight:600;color:var(--gray-600);display:block;margin-bottom:4px}
+.sim-field input,.sim-field select,.sim-field textarea{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;outline:none}
+.sim-field input:focus,.sim-field select:focus{border-color:var(--teal)}
+.sim-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:12px;border-bottom:1px solid var(--gray-100)}
+.sim-nav{display:flex;gap:8px;margin-top:14px;justify-content:space-between}
+.sim-btn-next{background:var(--teal);color:#fff;padding:8px 20px;border:none;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600}
+.sim-btn-next:hover{background:var(--teal-dark)}
+.sim-btn-back{background:var(--gray-100);color:var(--gray-700);padding:8px 16px;border:none;border-radius:7px;cursor:pointer;font-size:13px}
+.submit-btn{background:var(--success);color:#fff;padding:9px 20px;border:none;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600;width:100%}
+
+/* Right panel */
+.panel-right{width:260px;background:#fff;border-left:1px solid var(--border);overflow-y:auto;flex-shrink:0}
+.detail-sec{padding:14px;border-bottom:1px solid var(--border)}
+.detail-sec h4{font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+.drow{margin-bottom:10px}
+.dlabel{font-size:11px;color:var(--gray-400);margin-bottom:2px}
+.dvalue{font-size:13px;font-weight:500;color:var(--gray-800)}
+.checkbox-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.checkbox-row input[type="checkbox"]{width:14px;height:14px;accent-color:var(--teal)}
+.checkbox-row label{font-size:12px;color:var(--gray-600)}
+
+/* Modals */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:999;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-overlay.open{opacity:1;pointer-events:auto}
+.modal{background:#fff;border-radius:12px;padding:24px;width:420px;max-width:95vw;box-shadow:0 8px 24px rgba(0,0,0,.14)}
+.modal h3{font-size:16px;font-weight:700;margin-bottom:16px;color:var(--gray-800)}
+.mfield{margin-bottom:12px}
+.mfield label{font-size:12px;font-weight:600;color:var(--gray-600);display:block;margin-bottom:4px}
+.mfield input,.mfield select{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;outline:none}
+.mfield input:focus,.mfield select:focus{border-color:var(--teal)}
+.mfield .hint{font-size:11px;color:var(--gray-400);margin-top:3px}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+
+/* Toast */
+.toast{position:fixed;bottom:20px;right:20px;background:var(--gray-900);color:#fff;padding:11px 18px;border-radius:8px;display:none;z-index:9999;font-size:13px;font-weight:500;max-width:340px;border-left:4px solid var(--teal)}
+.toast.error{border-left-color:var(--danger)}
+.empty-state{text-align:center;padding:48px 20px;color:var(--gray-400);font-size:13px}
+.empty-state h4{font-size:16px;font-weight:600;margin-bottom:8px;color:var(--gray-600)}
+</style>
+</head>
+<body>
+
+<!-- Teal-themed sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <h2>HRMS</h2><span>Customization Subsystem</span>
+    <span class="module-tag">TASK FLOW</span>
+  </div>
+  <div class="module-diff">UI navigation sequences — distinct from approval workflows</div>
+  <div class="sidebar-section">Components</div>
+  <a href="../../form_flexfield/frontend/forms.html">Form Designer</a>
+  <a href="../../form_flexfield/frontend/flexfields.html">Flexfield Manager</a>
+  <a href="workflow.html">Workflow Engine</a>
+  <a href="taskflow.html" class="active">Task Flow Builder</a>
+  <a href="../../eit_lookup/frontend/eit.html">EIT Handler</a>
+  <a href="../../eit_lookup/frontend/lookup.html">Lookup Customizer</a>
+  <div class="sidebar-section">Reports</div>
+  <a href="../../module_report/frontend/module_customizer.html">Module Customizer</a>
+  <a href="../../module_report/frontend/report_builder.html">Report Builder</a>
+  <div class="sidebar-section">Integrations</div>
+  <a href="../../integration/frontend/employee_onboarding.html">Onboarding</a>
+  <a href="../../integration/frontend/performance_management.html">Performance Mgmt</a>
+  <a href="../../integration/frontend/customization.html">Dashboard</a>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-left">
+      <h2>Task Flow Builder</h2>
+      <p>Define multi-window UI navigation sequences for HR processes</p>
+    </div>
+    <div class="topbar-right">
+      <span class="badge badge-teal">UI Navigation Sequences</span>
+      <span class="badge badge-gray">Multi-window Flow</span>
+      <span class="badge badge-green" id="serverBadge">Connecting...</span>
+    </div>
+  </div>
+
+  <div class="body">
+    <!-- Left panel -->
+    <div class="panel-left">
+      <div class="phead">
+        <h3>All Task Flows</h3>
+        <button class="btn btn-teal btn-sm" onclick="openCreateModal()">+ New</button>
+      </div>
+      <div class="search-box">
+        <input type="text" id="searchInput" placeholder="Search flows..." oninput="filterFlows()">
+      </div>
+      <div class="tf-list" id="tfList">
+        <div class="empty-state"><h4>No task flows</h4></div>
+      </div>
+    </div>
+
+    <!-- Center panel -->
+    <div class="panel-center">
+      <div class="center-head">
+        <h3 id="centerTitle">Select a task flow</h3>
+        <div class="center-actions" id="centerActions" style="display:none">
+          <button class="btn btn-teal btn-sm" onclick="openAddWindowModal()">+ Add Window</button>
+          <button class="btn btn-success btn-sm" id="simBtn" onclick="startSimulation()">Simulate Flow</button>
+          <button class="btn btn-ghost btn-sm" id="toggleStatusBtn" onclick="toggleStatus()">Deactivate</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteFlow()">Delete</button>
+        </div>
+      </div>
+      <div class="canvas" id="canvas">
+        <div class="empty-state"><h4>No task flow selected</h4>Task flows define the sequence of UI windows a user navigates. Different from workflows — no approvals here, just guided navigation.</div>
+      </div>
+    </div>
+
+    <!-- Right panel -->
+    <div class="panel-right">
+      <div class="detail-sec">
+        <h4>Flow Details</h4>
+        <div id="detailContent"><p style="font-size:12px;color:var(--gray-400)">Select a flow to view details.</p></div>
+      </div>
+      <div class="detail-sec">
+        <h4>Settings</h4>
+        <div id="settingsContent">
+          <p style="font-size:12px;color:var(--gray-400)">Select a flow to configure settings.</p>
+        </div>
+      </div>
+      <div class="detail-sec">
+        <h4>Difference from Workflow</h4>
+        <p style="font-size:11px;color:var(--gray-500);line-height:1.6">
+          <strong>Task Flow</strong> = UI navigation. Users step through windows (forms, screens) in a defined order.<br><br>
+          <strong>Workflow</strong> = Approval process. Steps require human decision and can escalate.<br><br>
+          Task Flows have no escalation, no approval, just guided user experience.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Create Task Flow Modal -->
+<div class="modal-overlay" id="createModal">
+  <div class="modal">
+    <h3>Create Task Flow</h3>
+    <div class="mfield">
+      <label>Flow Name</label>
+      <input type="text" id="newTfName" placeholder="e.g. Employee Onboarding">
+    </div>
+    <div class="mfield">
+      <label>Use Template</label>
+      <select id="tfTemplate">
+        <option value="">-- Custom (blank) --</option>
+        <option value="onboarding">New Employee Onboarding</option>
+        <option value="leave">Leave Application</option>
+        <option value="expense">Expense Claim Submission</option>
+        <option value="recruitment">Recruitment Application</option>
+      </select>
+      <div class="hint">Templates pre-populate the flow with standard windows.</div>
+    </div>
+    <div class="mfield">
+      <label>Assigned Role</label>
+      <select id="tfRole">
+        <option value="Employee">Employee</option>
+        <option value="HR Admin">HR Admin</option>
+        <option value="Manager">Manager</option>
+        <option value="Finance">Finance</option>
+        <option value="IT">IT Department</option>
+      </select>
+    </div>
+    <div class="mfield">
+      <label style="display:flex;gap:8px;align-items:center;font-weight:normal">
+        <input type="checkbox" id="newTfValidate" style="width:14px"> Validate before advancing to next window
+      </label>
+      <label style="display:flex;gap:8px;align-items:center;font-weight:normal;margin-top:6px">
+        <input type="checkbox" id="newTfBackNav" style="width:14px"> Allow back navigation
+      </label>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-danger btn-sm" onclick="closeModal('createModal')">Cancel</button>
+      <button class="btn btn-teal btn-sm" onclick="createFlow()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Window Modal -->
+<div class="modal-overlay" id="addWinModal">
+  <div class="modal">
+    <h3>Add Window</h3>
+    <div class="mfield">
+      <label>Window Name</label>
+      <input type="text" id="newWinName" placeholder="e.g. Personal Details">
+    </div>
+    <div class="mfield">
+      <label>Window Type</label>
+      <select id="newWinType">
+        <option value="Entry">Entry — first window of the flow</option>
+        <option value="Middle">Middle — intermediate step</option>
+        <option value="Review">Review — read-only summary</option>
+        <option value="Exit">Exit — final submission window</option>
+      </select>
+    </div>
+    <div class="mfield">
+      <label>Required Fields (comma-separated)</label>
+      <input type="text" id="newWinFields" placeholder="e.g. Name, Date of Birth, Department">
+      <div class="hint">These fields will appear in the simulation for this window.</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-danger btn-sm" onclick="closeModal('addWinModal')">Cancel</button>
+      <button class="btn btn-teal btn-sm" onclick="addWindow()">Add Window</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = 'http://localhost:8080';
+let flows = [], selectedTf = null, currentWindows = [], simStep = 0, simActive = false;
+const simData = {}; // collects user input across windows
+
+const TF_TEMPLATES = {
+  onboarding: [
+    { name:'Personal Details',   type:'Entry',  fields:['Full Name','Date of Birth','Address','Contact Number'] },
+    { name:'Job Details',         type:'Middle', fields:['Job Title','Department','Start Date','Reporting Manager'] },
+    { name:'Document Upload',     type:'Middle', fields:['ID Document','Qualification Certificate','Contract Type'] },
+    { name:'Review and Submit',   type:'Exit',   fields:[] },
+  ],
+  leave: [
+    { name:'Leave Type',          type:'Entry',  fields:['Leave Type','Start Date','End Date'] },
+    { name:'Reason',              type:'Middle', fields:['Reason for Leave','Emergency Contact'] },
+    { name:'Confirm Application', type:'Exit',   fields:[] },
+  ],
+  expense: [
+    { name:'Expense Details',     type:'Entry',  fields:['Expense Type','Amount','Date Incurred','Description'] },
+    { name:'Receipts',            type:'Middle', fields:['Receipt Reference','Vendor Name'] },
+    { name:'Review & Submit',     type:'Exit',   fields:[] },
+  ],
+  recruitment: [
+    { name:'Job Application',     type:'Entry',  fields:['Position Applied','Full Name','Email','Phone'] },
+    { name:'Experience',          type:'Middle', fields:['Years of Experience','Previous Employer','Qualifications'] },
+    { name:'Declaration',         type:'Middle', fields:['Declaration Statement'] },
+    { name:'Submit Application',  type:'Exit',   fields:[] },
+  ],
+};
+
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className='toast '+type; t.style.display='block';
+  clearTimeout(t._t); t._t = setTimeout(() => t.style.display='none', 3500);
+}
+function setServerStatus(ok) {
+  const b = document.getElementById('serverBadge');
+  b.textContent = ok ? 'Live (DB)' : 'Offline';
+  b.className   = ok ? 'badge badge-green' : 'badge badge-gray';
+}
+
+async function loadFlows() {
+  try {
+    const res = await fetch(`${API}/api/taskflows`);
+    if (!res.ok) throw new Error();
+    flows = await res.json();
+    setServerStatus(true);
+  } catch {
+    flows = [];
+    setServerStatus(false);
+  }
+  renderList(flows);
+}
+
+function renderList(list) {
+  const el = document.getElementById('tfList');
+  if (!list.length) {
+    el.innerHTML = '<div class="empty-state"><h4>No flows</h4>Create a task flow to begin.</div>';
+    return;
+  }
+  el.innerHTML = list.map(tf => `
+    <div class="tf-item ${selectedTf && selectedTf.taskId===tf.taskId?'selected':''}"
+         onclick="selectFlow(${tf.taskId})">
+      <div class="tf-item-name">${tf.flowName}</div>
+      <div class="tf-item-meta">
+        <span class="badge ${tf.flowStatus==='Active'?'badge-teal':'badge-gray'}" style="font-size:10px">${tf.flowStatus||'Inactive'}</span>
+        <span>${tf.assignedRole||''}</span>
+      </div>
+    </div>`).join('');
+}
+
+async function selectFlow(id) {
+  selectedTf = flows.find(f => f.taskId === id);
+  simActive = false; simStep = 0;
+  if (!selectedTf) return;
+
+  currentWindows = [];
+  try {
+    const res = await fetch(`${API}/api/taskflows/${id}/windows`);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    currentWindows = data.map(w => typeof w === 'string' ? {name:w, type:'Middle', fields:[]} : w);
+  } catch {
+    const tmplKey = selectedTf.templateKey;
+    currentWindows = tmplKey && TF_TEMPLATES[tmplKey] ? TF_TEMPLATES[tmplKey].map(w=>({...w})) : [];
+  }
+
+  document.getElementById('centerActions').style.display = 'flex';
+  document.getElementById('centerTitle').textContent = `Task Flow — ${selectedTf.flowName}`;
+  document.getElementById('toggleStatusBtn').textContent = selectedTf.flowStatus==='Active'?'Deactivate':'Activate';
+  renderList(flows);
+  renderCanvas();
+  renderSettings();
+}
+
+function renderCanvas() {
+  const canvas = document.getElementById('canvas');
+  if (!selectedTf) return;
+
+  if (!currentWindows.length) {
+    canvas.innerHTML = '<div class="empty-state"><h4>No windows yet</h4>Add windows to define the navigation sequence.</div>';
+    return;
+  }
+
+  const flowHtml = currentWindows.map((w, i) => {
+    const isDone = simActive && i < simStep;
+    const isCurrent = simActive && i === simStep;
+    const name = typeof w === 'string' ? w : w.name;
+    const type = typeof w === 'object' ? w.type : 'Middle';
+    return `
+      <div class="window-box ${isDone?'completed':''} ${isCurrent?'active-win':''} ${!simActive&&i===0?'selected-win':''}">
+        <span class="window-num ${isDone?'done':''} ${isCurrent?'active':''}">${i+1}</span>
+        <button class="window-remove" onclick="removeWindow(${i})">x</button>
+        <div class="window-name">${name}</div>
+        <div class="window-type">${type}</div>
+      </div>
+      ${i < currentWindows.length-1 ? '<div class="window-arrow">→</div>' : ''}`;
+  }).join('');
+
+  const tableHtml = `
+    <table class="win-tbl" style="margin-top:14px">
+      <thead><tr><th>#</th><th>Window Name</th><th>Type</th><th>Fields</th><th>Action</th></tr></thead>
+      <tbody>
+        ${currentWindows.map((w,i) => {
+          const name = typeof w === 'string' ? w : w.name;
+          const type = typeof w === 'object' ? w.type : 'Middle';
+          const fields = typeof w === 'object' && w.fields ? w.fields.length : '—';
+          return `<tr>
+            <td>${i+1}</td><td>${name}</td><td>${type}</td><td>${fields}</td>
+            <td><button class="btn btn-danger btn-sm" onclick="removeWindow(${i})">Remove</button></td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+
+  // Simulation panel
+  let simHtml = '';
+  if (simActive && simStep < currentWindows.length) {
+    const win = currentWindows[simStep];
+    const name = typeof win === 'string' ? win : win.name;
+    const fields = typeof win === 'object' && win.fields ? win.fields : [];
+    const isExit = typeof win === 'object' && win.type === 'Exit';
+
+    simHtml = `
+      <div class="sim-panel">
+        <h4>
+          <span style="background:var(--teal);color:#fff;padding:2px 10px;border-radius:10px;font-size:11px">Simulation</span>
+          ${name} — Window ${simStep+1} of ${currentWindows.length}
+        </h4>
+        <div style="background:var(--gray-100);border-radius:8px;height:5px;margin-bottom:14px">
+          <div style="background:var(--teal);height:5px;border-radius:8px;width:${((simStep+1)/currentWindows.length*100).toFixed(0)}%;transition:width .4s"></div>
+        </div>
+        ${isExit ? `
+          <div style="text-align:center;padding:20px">
+            <p style="font-size:15px;font-weight:600;color:var(--gray-800);margin-bottom:10px">Review your submission</p>
+            <div style="background:var(--gray-50);border-radius:8px;padding:14px;text-align:left;font-size:12px;margin-bottom:14px">
+              ${Object.entries(simData).map(([k,v]) => `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border)"><span style="color:var(--gray-500)">${k}</span><span style="font-weight:600">${v||'—'}</span></div>`).join('')}
+            </div>
+            <button class="submit-btn" onclick="submitSimulation()">Submit</button>
+          </div>
+        ` : fields.map(f => `
+          <div class="sim-field">
+            <label>${f}<span style="color:var(--danger)">*</span></label>
+            <input type="text" placeholder="Enter ${f}" oninput="simData['${f}']=this.value" value="${simData[f]||''}">
+          </div>`).join('')}
+        ${!isExit ? `
+          <div class="sim-nav">
+            ${simStep > 0 && selectedTf.allowBackNav !== false
+              ? `<button class="sim-btn-back" onclick="simBack()">Back</button>`
+              : `<span></span>`}
+            <button class="sim-btn-next" onclick="simNext()">
+              ${simStep < currentWindows.length-1 ? 'Next' : 'Review'}
+            </button>
+          </div>` : ''}
+      </div>`;
+  } else if (simActive && simStep >= currentWindows.length) {
+    simHtml = `<div class="sim-panel" style="text-align:center;padding:20px">
+      <p style="font-size:16px;font-weight:700;color:var(--success)">Flow Complete!</p>
+      <p style="font-size:12px;color:var(--gray-500);margin-top:6px">All ${currentWindows.length} windows completed.</p>
+      <button class="btn btn-ghost btn-sm" style="margin-top:12px" onclick="stopSimulation()">Close Simulation</button>
+    </div>`;
+  }
+
+  canvas.innerHTML = `
+    <p style="font-size:11px;color:var(--gray-400);margin-bottom:10px">
+      FLOW: ${selectedTf.flowName.toUpperCase()} — ${currentWindows.length} WINDOWS
+      ${selectedTf.validateOnNext ? '| Validate on Next: ON' : ''} | ${selectedTf.allowBackNav?'Back Nav: Yes':'Back Nav: No'}
+    </p>
+    <div class="window-flow">${flowHtml}</div>
+    ${tableHtml}
+    ${simHtml}`;
+}
+
+function startSimulation() {
+  if (!currentWindows.length) { showToast('Add windows first.', 'error'); return; }
+  simActive = true; simStep = 0;
+  Object.keys(simData).forEach(k => delete simData[k]);
+  document.getElementById('simBtn').textContent = 'Stop Simulation';
+  document.getElementById('simBtn').onclick = stopSimulation;
+  renderCanvas();
+  showToast('Simulation started. Navigate through each window.');
+}
+
+function stopSimulation() {
+  simActive = false; simStep = 0;
+  document.getElementById('simBtn').textContent = 'Simulate Flow';
+  document.getElementById('simBtn').onclick = startSimulation;
+  renderCanvas();
+}
+
+function simNext() {
+  if (selectedTf.validateOnNext) {
+    const win = currentWindows[simStep];
+    const fields = typeof win === 'object' && win.fields ? win.fields : [];
+    const missing = fields.filter(f => !simData[f] || !simData[f].trim());
+    if (missing.length) {
+      showToast(`Fill in required fields: ${missing.join(', ')}`, 'error'); return;
+    }
+  }
+  simStep++;
+  renderCanvas();
+}
+
+function simBack() {
+  if (simStep > 0) { simStep--; renderCanvas(); }
+}
+
+function submitSimulation() {
+  simActive = false;
+  simStep = currentWindows.length;
+  showToast(`Task flow "${selectedTf.flowName}" submitted successfully.`, 'success');
+  document.getElementById('simBtn').textContent = 'Simulate Flow';
+  document.getElementById('simBtn').onclick = startSimulation;
+  renderCanvas();
+}
+
+function renderSettings() {
+  if (!selectedTf) return;
+  document.getElementById('settingsContent').innerHTML = `
+    <div class="drow"><div class="dlabel">Name</div><div class="dvalue">${selectedTf.flowName}</div></div>
+    <div class="drow"><div class="dlabel">Status</div><div class="dvalue">${selectedTf.flowStatus||'Inactive'}</div></div>
+    <div class="drow"><div class="dlabel">Role</div><div class="dvalue">${selectedTf.assignedRole||'Employee'}</div></div>
+    <div class="drow"><div class="dlabel">Task ID</div><div class="dvalue">#${selectedTf.taskId}</div></div>
+    <div class="checkbox-row" style="margin-top:8px">
+      <input type="checkbox" id="chkValidate" ${selectedTf.validateOnNext?'checked':''} onchange="updateSetting('validateOnNext',this.checked)">
+      <label for="chkValidate">Validate on Next</label>
+    </div>
+    <div class="checkbox-row">
+      <input type="checkbox" id="chkBack" ${selectedTf.allowBackNav!==false?'checked':''} onchange="updateSetting('allowBackNav',this.checked)">
+      <label for="chkBack">Allow Back Navigation</label>
+    </div>`;
+}
+
+function updateSetting(key, val) {
+  if (!selectedTf) return;
+  selectedTf[key] = val;
+  showToast(`Setting updated: ${key} = ${val}`);
+}
+
+async function createFlow() {
+  const name     = document.getElementById('newTfName').value.trim();
+  const template = document.getElementById('tfTemplate').value;
+  const role     = document.getElementById('tfRole').value;
+  const validate = document.getElementById('newTfValidate').checked;
+  const backNav  = document.getElementById('newTfBackNav').checked;
+
+  if (!name) { showToast('Flow name is required.', 'error'); return; }
+  if (flows.some(f => f.flowName.toLowerCase() === name.toLowerCase())) {
+    showToast(`Flow "${name}" already exists.`, 'error'); return;
+  }
+
+  let newId;
+  try {
+    const res = await fetch(`${API}/api/taskflows/create`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ flowName: name, assignedRole: role, validateOnNext: validate, allowBackNav: backNav, templateKey: template })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Create failed');
+    newId = data.taskId || data.id;
+    showToast(`Task flow "${name}" created.`);
+  } catch (err) {
+    showToast(err.message || 'Cannot create. Server offline?', 'error'); return;
+  }
+
+  // For predefined templates, just show the taskflow without adding windows
+  if (template && template !== 'blank' && TF_TEMPLATES[template] && newId) {
+    // Add windows from template
+    for (const win of TF_TEMPLATES[template]) {
+      try {
+        await fetch(`${API}/api/taskflows/${newId}/windows`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ windowName: win.name, windowType: win.type })
+        });
+      } catch {}
+    }
+    if (TF_TEMPLATES[template].length > 0) {
+      showToast(`"${name}" created with ${TF_TEMPLATES[template].length} windows from template.`);
+    }
+  }
+
+  document.getElementById('newTfName').value = '';
+  closeModal('createModal');
+  await loadFlows();
+  if (newId) await selectFlow(newId);
+}
+
+async function addWindow() {
+  const name   = document.getElementById('newWinName').value.trim();
+  const type   = document.getElementById('newWinType').value;
+  const fields = document.getElementById('newWinFields').value.split(',').map(s=>s.trim()).filter(Boolean);
+
+  if (!name) { showToast('Window name is required.', 'error'); return; }
+  if (!selectedTf) return;
+
+  if (currentWindows.some(w => (typeof w==='string'?w:w.name).toLowerCase() === name.toLowerCase())) {
+    showToast(`Window "${name}" already exists.`, 'error'); return;
+  }
+
+  try {
+    const res = await fetch(`${API}/api/taskflows/${selectedTf.taskId}/windows`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ windowName: name, windowType: type })
+    });
+    if (!res.ok) throw new Error('Add window failed');
+    showToast(`Window "${name}" added.`);
+    closeModal('addWinModal');
+    document.getElementById('newWinName').value = '';
+    await selectFlow(selectedTf.taskId);
+  } catch (err) {
+    // Add locally for demonstration
+    currentWindows.push({ name, type, fields });
+    showToast(`Window "${name}" added (local).`);
+    closeModal('addWinModal');
+    document.getElementById('newWinName').value = '';
+    renderCanvas();
+  }
+}
+
+async function removeWindow(idx) {
+  if (!confirm(`Remove window "${(typeof currentWindows[idx]==='string'?currentWindows[idx]:currentWindows[idx].name)}"?`)) return;
+  try {
+    const winName = typeof currentWindows[idx]==='string' ? currentWindows[idx] : currentWindows[idx].name;
+    await fetch(`${API}/api/taskflows/${selectedTf.taskId}/windows`, {
+      method:'DELETE', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ windowName: winName })
+    });
+    currentWindows.splice(idx, 1);
+    showToast('Window removed.');
+    renderCanvas();
+  } catch {
+    currentWindows.splice(idx, 1);
+    showToast('Window removed (local).');
+    renderCanvas();
+  }
+}
+
+async function toggleStatus() {
+  if (!selectedTf) return;
+  const newStatus = selectedTf.flowStatus === 'Active' ? 'Inactive' : 'Active';
+  try {
+    await fetch(`${API}/api/taskflows/${selectedTf.taskId}/status`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ status: newStatus })
+    });
+    selectedTf.flowStatus = newStatus;
+    document.getElementById('toggleStatusBtn').textContent = newStatus==='Active'?'Deactivate':'Activate';
+    showToast(`Status set to ${newStatus}.`);
+    await loadFlows();
+    renderSettings();
+  } catch {
+    selectedTf.flowStatus = newStatus;
+    document.getElementById('toggleStatusBtn').textContent = newStatus==='Active'?'Deactivate':'Activate';
+    showToast(`Status set to ${newStatus} (local).`);
+    renderSettings();
+  }
+}
+
+async function deleteFlow() {
+  if (!selectedTf) return;
+  if (!confirm(`Delete task flow "${selectedTf.flowName}"?`)) return;
+  try {
+    await fetch(`${API}/api/taskflows/${selectedTf.taskId}`, { method:'DELETE' });
+    showToast('Task flow deleted.');
+    selectedTf = null; currentWindows = [];
+    document.getElementById('centerActions').style.display = 'none';
+    document.getElementById('centerTitle').textContent = 'Select a task flow';
+    document.getElementById('canvas').innerHTML = '<div class="empty-state"><h4>No task flow selected</h4></div>';
+    document.getElementById('detailContent').innerHTML = '<p style="font-size:12px;color:var(--gray-400)">Select a flow.</p>';
+    await loadFlows();
+  } catch (err) {
+    showToast('Delete failed.', 'error');
+  }
+}
+
+function filterFlows() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  renderList(flows.filter(f => f.flowName.toLowerCase().includes(q)));
+}
+
+function openCreateModal()  { document.getElementById('createModal').classList.add('open'); }
+function openAddWindowModal() {
+  if (!selectedTf) { showToast('Select a task flow first.', 'error'); return; }
+  document.getElementById('addWinModal').classList.add('open');
+}
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+loadFlows();
+</script>
+</body>
+</html>

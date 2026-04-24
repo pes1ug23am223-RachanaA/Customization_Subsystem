@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EIT Handler — HRMS</title>
+<link rel="stylesheet" href="../../form_flexfield/frontend/style.css">
+<style>
+.eit-context-badge {
+  display:inline-block; padding:2px 10px; border-radius:12px;
+  font-size:11px; font-weight:700; text-transform:uppercase;
+}
+.ctx-employee { background:#dbeafe; color:#1d4ed8; }
+.ctx-job      { background:#dcfce7; color:#15803d; }
+.ctx-position { background:#ede9fe; color:#7c3aed; }
+.eit-card {
+  background:white; border:1px solid var(--border); border-radius:var(--radius);
+  padding:16px; margin-bottom:10px; display:grid;
+  grid-template-columns:1fr auto; gap:12px; align-items:start;
+}
+.eit-card-info { }
+.eit-card-name { font-size:14px; font-weight:700; color:var(--gray-800); margin-bottom:4px; }
+.eit-card-meta { font-size:12px; color:var(--gray-500); display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+.eit-card-actions { display:flex; gap:8px; align-items:flex-start; }
+.form-preview-embed {
+  background:var(--gray-50); border:1px solid var(--border); border-radius:var(--radius);
+  padding:14px; margin-top:14px; font-size:13px;
+}
+.form-preview-embed h4 { font-size:12px; font-weight:700; color:var(--gray-600); margin-bottom:10px; text-transform:uppercase; letter-spacing:.5px; }
+.eit-inject-btn { background:#6366f1; color:#fff; }
+.eit-inject-btn:hover { background:#4f46e5; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="content">
+    <header class="topbar">
+      <div>
+        <h1>EIT Handler</h1>
+        <p class="subtext">Extra Information Types — define custom structured fields for employees, jobs, and positions</p>
+      </div>
+      <span class="badge badge-green" id="serverStatus">Connecting...</span>
+    </header>
+
+    <div class="int-banner">
+      EITs capture additional structured data beyond standard HR fields. Each EIT is linked to a context
+      (EMPLOYEE, JOB, or POSITION) and integrates with the Recruitment and Onboarding subsystems.
+      EITs can be <strong>injected into forms</strong> — select an EIT and use the "Add to Form" button to embed it.
+      <br>
+      <strong>Note:</strong> Employee and candidate records from external subsystems are read-only here.
+    </div>
+
+    <section class="stats">
+      <div class="card"><h3 id="eitTotal">0</h3><p>Total EITs</p></div>
+      <div class="card"><h3 id="eitEmployee">0</h3><p>Employee Context</p></div>
+      <div class="card success"><h3 id="eitJob">0</h3><p>Job / Position</p></div>
+    </section>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Add New EIT</h2></div>
+      <div class="inline-form">
+        <div class="form-group" style="margin-bottom:0">
+          <input type="text" id="eitName" placeholder="Field Name (e.g. Passport Number)" style="width:200px">
+        </div>
+        <select id="eitType" style="width:130px">
+          <option value="Text">Text</option>
+          <option value="Number">Number</option>
+          <option value="Date">Date</option>
+          <option value="Boolean">Yes/No</option>
+        </select>
+        <select id="eitContext" style="width:140px">
+          <option value="EMPLOYEE">EMPLOYEE</option>
+          <option value="JOB">JOB</option>
+          <option value="POSITION">POSITION</option>
+        </select>
+        <select id="eitEmpLink" style="width:200px">
+          <option value="">-- Link Employee (optional) --</option>
+        </select>
+        <button onclick="addEIT()">Add EIT</button>
+      </div>
+      <p class="hint">EITs linked to an employee appear in that employee's profile in Onboarding.</p>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Existing EITs</h2>
+        <span class="badge badge-gray" id="eitCountBadge">0 records</span>
+      </div>
+      <div id="eitCards"><p class="empty-state">No EITs defined yet.</p></div>
+    </div>
+
+    <!-- Form Integration Panel -->
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Inject EIT into Form</h2>
+        <span class="badge badge-blue">Form Designer Integration</span>
+      </div>
+      <p style="font-size:13px;color:var(--gray-500);margin-bottom:14px">
+        Select an EIT and a target form to add the EIT field as a custom field in that form.
+        This makes EIT data collectible directly within HRMS forms.
+      </p>
+      <div class="inline-form">
+        <div class="form-group" style="margin-bottom:0">
+          <label style="font-size:11px;margin-bottom:3px">Select EIT</label>
+          <select id="injectEitSel" style="width:200px"><option>Loading...</option></select>
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label style="font-size:11px;margin-bottom:3px">Target Form</label>
+          <select id="injectFormSel" style="width:200px"><option>Loading...</option></select>
+        </div>
+        <button class="eit-inject-btn" onclick="injectEITIntoForm()" style="align-self:flex-end">Add to Form</button>
+      </div>
+      <div id="injectResult" style="margin-top:12px"></div>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="../../form_flexfield/frontend/nav.js"></script>
+<script>
+const API = 'http://localhost:8080';
+let eitList = [];
+
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast '+type; t.style.display='block';
+  clearTimeout(t._t); t._t = setTimeout(() => t.style.display='none', 3500);
+}
+
+function setStatus(ok) {
+  const el = document.getElementById('serverStatus');
+  el.textContent = ok ? 'Live' : 'Offline';
+  el.className = ok ? 'badge badge-green' : 'badge badge-red';
+}
+
+async function loadEITs() {
+  try {
+    const res = await fetch(`${API}/api/eits`);
+    if (!res.ok) throw new Error();
+    eitList = await res.json();
+    setStatus(true);
+  } catch {
+    eitList = [];
+    setStatus(false);
+  }
+  renderEITs();
+  populateEitSelect();
+  loadFormSelect();
+  loadEmployeeLink();
+}
+
+function renderEITs() {
+  const container = document.getElementById('eitCards');
+  const badge = document.getElementById('eitCountBadge');
+  badge.textContent = `${eitList.length} record${eitList.length!==1?'s':''}`;
+
+  let empCount = 0, jobCount = 0;
+
+  if (!eitList.length) {
+    container.innerHTML = '<p class="empty-state">No EITs defined yet.</p>';
+  } else {
+    container.innerHTML = eitList.map(e => {
+      const ctx = e.context || e.eitContext || 'EMPLOYEE';
+      if (ctx === 'EMPLOYEE') empCount++;
+      else jobCount++;
+      const ctxClass = ctx === 'EMPLOYEE' ? 'ctx-employee' : (ctx === 'JOB' ? 'ctx-job' : 'ctx-position');
+      return `<div class="eit-card">
+        <div class="eit-card-info">
+          <div class="eit-card-name">${e.fieldName || e.eitName || 'Unnamed'}</div>
+          <div class="eit-card-meta">
+            <span class="eit-context-badge ${ctxClass}">${ctx}</span>
+            <span class="type-badge type-${(e.dataType||e.eitType||'text').toLowerCase()}">${e.dataType||e.eitType||'Text'}</span>
+            ${e.linkedEmployee ? `<span class="badge badge-green" style="font-size:10px">Linked: ${e.linkedEmployee}</span>` : ''}
+            <span class="badge badge-gray" style="font-size:10px">#${e.eitId || e.id}</span>
+          </div>
+        </div>
+        <div class="eit-card-actions">
+          <button class="btn-sm btn-danger danger" onclick="deleteEIT(${e.eitId || e.id})">Delete</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  document.getElementById('eitTotal').innerText    = eitList.length;
+  document.getElementById('eitEmployee').innerText = empCount;
+  document.getElementById('eitJob').innerText      = jobCount;
+}
+
+async function loadEmployeeLink() {
+  try {
+    const res = await fetch(`${API}/api/employees`);
+    const emps = await res.json();
+    const sel = document.getElementById('eitEmpLink');
+    sel.innerHTML = '<option value="">-- Link Employee (optional) --</option>' +
+      emps.map(e => `<option value="${e.employeeId||e.id}">${e.fullName||e.name||e.employeeId} (${e.employeeId||e.id})</option>`).join('');
+  } catch {}
+}
+
+async function addEIT() {
+  const name    = document.getElementById('eitName').value.trim();
+  const type    = document.getElementById('eitType').value;
+  const context = document.getElementById('eitContext').value;
+  const empLink = document.getElementById('eitEmpLink').value;
+
+  if (!name) { showToast('Enter a field name.', 'error'); return; }
+
+  // Duplicate check within same context
+  if (eitList.some(e =>
+    (e.fieldName||e.eitName||'').toLowerCase() === name.toLowerCase() &&
+    (e.context||e.eitContext||'EMPLOYEE') === context
+  )) {
+    showToast(`EIT "${name}" already exists for ${context} context.`, 'error'); return;
+  }
+
+  try {
+    const res = await fetch(`${API}/api/eits`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ fieldName: name, dataType: type, context, linkedEmployee: empLink || null })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Create failed');
+    showToast(`EIT "${name}" added.`);
+    document.getElementById('eitName').value = '';
+    await loadEITs();
+  } catch (err) {
+    showToast(err.message || 'Unable to add EIT.', 'error');
+  }
+}
+
+async function deleteEIT(id) {
+  if (!confirm('Delete this EIT?')) return;
+  try {
+    console.log('Deleting EIT ID:', id);
+    const res = await fetch(`${API}/api/eit/${id}`, { method:'DELETE' });
+    const data = await res.text();
+    console.log('Delete response status:', res.status);
+    console.log('Delete response body:', data);
+    if (!res.ok) {
+      console.error('Delete failed with status', res.status, ':', data);
+      throw new Error(`Delete failed: ${res.status} - ${data}`);
+    }
+    showToast('EIT deleted.');
+    await loadEITs();
+  } catch (err) {
+    console.error('Delete error:', err);
+    showToast(err.message || 'Delete failed.', 'error');
+  }
+}
+
+/* ── Form injection ── */
+function populateEitSelect() {
+  const sel = document.getElementById('injectEitSel');
+  sel.innerHTML = eitList.length
+    ? eitList.map(e => `<option value="${e.fieldName||e.eitName}">${e.fieldName||e.eitName} (${e.context||'EMPLOYEE'})</option>`).join('')
+    : '<option>No EITs defined</option>';
+}
+
+async function loadFormSelect() {
+  try {
+    const res = await fetch(`${API}/api/forms`);
+    const forms = await res.json();
+    const sel = document.getElementById('injectFormSel');
+    sel.innerHTML = forms.length
+      ? forms.map(f => `<option value="${f.formId}">${f.formName}</option>`).join('')
+      : '<option>No forms defined</option>';
+  } catch {
+    document.getElementById('injectFormSel').innerHTML = '<option>Server offline</option>';
+  }
+}
+
+async function injectEITIntoForm() {
+  const eitName  = document.getElementById('injectEitSel').value;
+  const formId   = document.getElementById('injectFormSel').value;
+  const resultEl = document.getElementById('injectResult');
+
+  if (!eitName || !formId) {
+    showToast('Select an EIT and a form.', 'error'); return;
+  }
+
+  try {
+    const res = await fetch(`${API}/api/forms/${formId}/fields`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ fieldName: eitName, fieldType: 'EIT', isMandatory: false })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Inject failed');
+    resultEl.innerHTML = `<div class="info-banner">EIT field "${eitName}" successfully added to the form. View in Form Designer to verify.</div>`;
+    showToast(`EIT "${eitName}" added to form.`);
+  } catch (err) {
+    if (err.message && err.message.toLowerCase().includes('duplicate')) {
+      resultEl.innerHTML = `<div class="warn-banner">EIT "${eitName}" is already in this form.</div>`;
+    } else {
+      resultEl.innerHTML = `<div class="warn-banner">Could not inject: ${err.message}</div>`;
+    }
+    showToast(err.message || 'Inject failed.', 'error');
+  }
+}
+
+loadEITs();
+</script>
+</body>
+</html>

@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Workflow Engine — HRMS</title>
+<style>
+:root {
+  --primary:#2563eb; --primary-dark:#1d4ed8; --primary-light:#eff6ff;
+  --success:#16a34a; --danger:#dc2626; --warning:#d97706;
+  --purple:#7c3aed; --purple-light:#ede9fe;
+  --gray-50:#f9fafb; --gray-100:#f3f4f6; --gray-200:#e5e7eb;
+  --gray-300:#d1d5db; --gray-400:#9ca3af; --gray-500:#6b7280;
+  --gray-600:#4b5563; --gray-700:#374151; --gray-800:#1f2937;
+  --border:#e5e7eb; --radius:10px;
+  --shadow:0 2px 8px rgba(0,0,0,.08);
+}
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',system-ui,sans-serif}
+body{background:var(--gray-100);display:flex;height:100vh;overflow:hidden}
+
+/* Sidebar */
+.sidebar{width:240px;background:#0f172a;color:white;padding:20px 0;flex-shrink:0;display:flex;flex-direction:column;overflow-y:auto}
+.sidebar-logo{padding:0 20px 20px;border-bottom:1px solid #1e293b;margin-bottom:8px}
+.sidebar-logo h2{font-size:15px;font-weight:700;color:#fff}
+.sidebar-logo span{font-size:11px;color:#64748b;display:block;margin-top:2px}
+.sidebar-section{padding:14px 20px 4px;font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:1px}
+.sidebar a{display:flex;align-items:center;gap:8px;text-decoration:none;color:#94a3b8;padding:9px 20px;border-left:3px solid transparent;font-size:13px;transition:.15s}
+.sidebar a:hover{background:#1e293b;color:#fff}
+.sidebar a.active{background:#1e293b;color:#fff;border-left-color:var(--primary)}
+
+/* Layout */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{background:#fff;border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.topbar-left h2{font-size:16px;font-weight:700;color:var(--gray-800)}
+.topbar-left p{font-size:11px;color:var(--gray-400);margin-top:1px}
+.topbar-right{display:flex;gap:8px;align-items:center}
+.badge{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
+.badge-green{background:#dcfce7;color:#15803d}
+.badge-gray{background:var(--gray-100);color:var(--gray-500)}
+.badge-blue{background:#dbeafe;color:#1d4ed8}
+.badge-amber{background:#fef3c7;color:#92400e}
+
+/* Three-panel layout */
+.body{flex:1;display:flex;overflow:hidden}
+
+/* Left panel */
+.panel-left{width:300px;background:#fff;border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.phead{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.phead h3{font-size:13px;font-weight:600;color:var(--gray-800)}
+.btn{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;transition:.15s;display:inline-flex;align-items:center;gap:4px}
+.btn-primary{background:var(--primary);color:#fff}.btn-primary:hover{background:var(--primary-dark)}
+.btn-success{background:var(--success);color:#fff}.btn-success:hover{background:#15803d}
+.btn-danger{background:#fee2e2;color:var(--danger)}.btn-danger:hover{background:#fecaca}
+.btn-approve{background:var(--success);color:#fff;padding:7px 14px;font-size:12px}
+.btn-approve:hover{background:#15803d}
+.btn-deact{background:#fef3c7;color:var(--warning)}.btn-deact:hover{background:#fde68a}
+.btn-sm{padding:4px 9px;font-size:11px}
+.search-box{padding:8px 12px;border-bottom:1px solid var(--border)}
+.search-box input{width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;outline:none}
+.search-box input:focus{border-color:var(--primary)}
+.wf-list{overflow-y:auto;flex:1}
+.wf-item{padding:11px 14px;border-bottom:1px solid var(--gray-100);cursor:pointer;transition:background .1s}
+.wf-item:hover{background:var(--gray-50)}
+.wf-item.selected{background:var(--primary-light);border-left:3px solid var(--primary)}
+.wf-item-name{font-size:13px;font-weight:600;color:var(--gray-800)}
+.wf-item-meta{font-size:11px;color:var(--gray-400);margin-top:2px;display:flex;gap:6px}
+
+/* Center panel */
+.panel-center{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--gray-100)}
+.center-head{background:#fff;border-bottom:1px solid var(--border);padding:12px 18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.center-head h3{font-size:14px;font-weight:600;color:var(--gray-800)}
+.center-actions{display:flex;gap:6px;flex-wrap:wrap}
+.canvas{flex:1;overflow-y:auto;padding:20px 18px}
+
+/* Step flow */
+.step-flow{display:flex;align-items:flex-start;flex-wrap:wrap;gap:0;margin-bottom:20px}
+.step-box{background:#fff;border:2px solid var(--border);border-radius:8px;padding:12px 14px;min-width:120px;text-align:center;cursor:pointer;transition:all .15s;position:relative;margin:8px 0}
+.step-box:hover{border-color:var(--primary);box-shadow:0 2px 8px rgba(37,99,235,.12)}
+.step-box.selected-step{border-color:var(--primary);background:var(--primary-light)}
+.step-box.approved{border-color:var(--success);background:#f0fdf4}
+.step-box.current-step{border-color:var(--warning);background:#fffbeb}
+.step-num{position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:var(--primary);color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 7px}
+.step-num.approved{background:var(--success)}
+.step-num.current{background:var(--warning)}
+.step-name{font-size:12px;font-weight:600;color:var(--gray-800);margin-top:4px}
+.step-assignee{font-size:10px;color:var(--gray-400);margin-top:2px}
+.step-esc{font-size:10px;color:var(--warning);margin-top:2px}
+.step-elapsed{font-size:10px;color:var(--purple);margin-top:2px;font-weight:600}
+.step-arrow{font-size:18px;color:var(--gray-400);padding:0 6px;margin-top:20px}
+
+/* Steps table */
+.steps-tbl{width:100%;border-collapse:collapse;background:#fff;border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
+.steps-tbl th{background:var(--gray-50);padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid var(--border)}
+.steps-tbl td{padding:10px 12px;font-size:12px;color:var(--gray-700);border-top:1px solid var(--gray-100)}
+.steps-tbl tr:hover td{background:var(--gray-50)}
+.status-chip{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700}
+.status-pending{background:var(--gray-100);color:var(--gray-600)}
+.status-current{background:#fef3c7;color:#92400e}
+.status-approved{background:#dcfce7;color:#15803d}
+
+/* Right panel */
+.panel-right{width:260px;background:#fff;border-left:1px solid var(--border);overflow-y:auto;flex-shrink:0}
+.detail-sec{padding:14px;border-bottom:1px solid var(--border)}
+.detail-sec h4{font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+.drow{margin-bottom:10px}
+.dlabel{font-size:11px;color:var(--gray-400);margin-bottom:2px}
+.dvalue{font-size:13px;font-weight:500;color:var(--gray-800)}
+.form-input{width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:6px;font-size:12px;outline:none;margin-top:2px}
+.form-input:focus{border-color:var(--primary)}
+
+/* Modals */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:999;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-overlay.open{opacity:1;pointer-events:auto}
+.modal{background:#fff;border-radius:12px;padding:24px;width:420px;max-width:95vw;box-shadow:0 8px 24px rgba(0,0,0,.14)}
+.modal h3{font-size:16px;font-weight:700;margin-bottom:16px;color:var(--gray-800)}
+.modal-field{margin-bottom:12px}
+.modal-field label{font-size:12px;font-weight:600;color:var(--gray-600);display:block;margin-bottom:4px}
+.modal-field input,.modal-field select{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;outline:none}
+.modal-field input:focus,.modal-field select:focus{border-color:var(--primary)}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+.hint{font-size:11px;color:var(--gray-400);margin-top:3px}
+
+/* Escalation warning */
+.esc-warning{background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#92400e;display:none}
+.esc-warning.show{display:block}
+
+/* Toast */
+.toast{position:fixed;bottom:20px;right:20px;background:var(--gray-900);color:#fff;padding:11px 18px;border-radius:8px;display:none;z-index:9999;font-size:13px;font-weight:500;max-width:340px;border-left:4px solid var(--primary)}
+.toast.error{border-left-color:var(--danger)}
+.toast.warning{border-left-color:var(--warning)}
+
+/* Empty state */
+.empty-state{text-align:center;padding:48px 20px;color:var(--gray-400);font-size:13px}
+.empty-state h4{font-size:16px;font-weight:600;margin-bottom:8px;color:var(--gray-600)}
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="sidebar-logo"><h2>HRMS</h2><span>Customization Subsystem</span></div>
+  <div class="sidebar-section">Components</div>
+  <a href="../../form_flexfield/frontend/forms.html">Form Designer</a>
+  <a href="../../form_flexfield/frontend/flexfields.html">Flexfield Manager</a>
+  <a href="workflow.html" class="active">Workflow Engine</a>
+  <a href="taskflow.html">Task Flow Builder</a>
+  <a href="../../eit_lookup/frontend/eit.html">EIT Handler</a>
+  <a href="../../eit_lookup/frontend/lookup.html">Lookup Customizer</a>
+  <div class="sidebar-section">Reports</div>
+  <a href="../../module_report/frontend/module_customizer.html">Module Customizer</a>
+  <a href="../../module_report/frontend/report_builder.html">Report Builder</a>
+  <div class="sidebar-section">Integrations</div>
+  <a href="../../integration/frontend/employee_onboarding.html">Onboarding</a>
+  <a href="../../integration/frontend/performance_management.html">Performance Mgmt</a>
+  <a href="../../integration/frontend/customization.html">Dashboard</a>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-left">
+      <h2>Workflow Engine</h2>
+      <p>hrms.app / customization / workflow-engine</p>
+    </div>
+    <div class="topbar-right">
+      <span class="badge badge-blue">Input: Process Rules</span>
+      <span class="badge badge-gray">Output: Approval Flow</span>
+      <span class="badge badge-green" id="serverBadge">Connecting...</span>
+    </div>
+  </div>
+
+  <div class="body">
+    <!-- Left: workflow list -->
+    <div class="panel-left">
+      <div class="phead">
+        <h3>All Workflows</h3>
+        <button class="btn btn-primary btn-sm" onclick="openCreateModal()">+ New</button>
+      </div>
+      <div class="search-box">
+        <input type="text" id="searchInput" placeholder="Search workflows..." oninput="filterWorkflows()">
+      </div>
+      <div class="wf-list" id="wfList">
+        <div class="empty-state"><h4>No workflows</h4>Create one or load from server</div>
+      </div>
+    </div>
+
+    <!-- Center: steps canvas -->
+    <div class="panel-center">
+      <div class="center-head">
+        <h3 id="centerTitle">Select a workflow</h3>
+        <div class="center-actions" id="centerActions" style="display:none">
+          <button class="btn btn-primary btn-sm" onclick="openAddStepModal()">+ Add Step</button>
+          <button class="btn btn-approve" id="approveBtn" onclick="approveCurrentStep()">Approve Step</button>
+          <button class="btn btn-deact btn-sm" id="toggleStatusBtn" onclick="toggleStatus()">Deactivate</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteWorkflow()">Delete</button>
+        </div>
+      </div>
+      <div class="canvas" id="canvas">
+        <div class="empty-state"><h4>No workflow selected</h4>Select one from the list or create a new workflow.</div>
+      </div>
+    </div>
+
+    <!-- Right: details -->
+    <div class="panel-right">
+      <div class="detail-sec">
+        <h4>Workflow Details</h4>
+        <div id="detailContent"><p style="font-size:12px;color:var(--gray-400)">Select a workflow to view details.</p></div>
+      </div>
+      <div class="detail-sec">
+        <h4>Step Details</h4>
+        <div id="stepDetail"><p style="font-size:12px;color:var(--gray-400)">Click a step to inspect it.</p></div>
+      </div>
+      <div class="detail-sec">
+        <h4>Escalation Log</h4>
+        <div id="escLog" style="font-size:11px;color:var(--gray-500)">No escalations recorded.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Create Workflow Modal -->
+<div class="modal-overlay" id="createModal">
+  <div class="modal">
+    <h3>Create Workflow</h3>
+    <div class="modal-field">
+      <label>Workflow Name</label>
+      <input type="text" id="newWfName" placeholder="e.g. Leave Approval">
+    </div>
+    <div class="modal-field">
+      <label>Assigned To</label>
+      <input type="text" id="newWfAssignee" placeholder="e.g. HR Admin">
+    </div>
+    <div class="modal-field">
+      <label>Use Predefined Template</label>
+      <select id="predefinedTemplate">
+        <option value="">-- Custom (start from scratch) --</option>
+        <option value="leave">Leave Approval (3-step)</option>
+        <option value="appraisal">Performance Appraisal (6-step)</option>
+        <option value="onboarding">Onboarding Checklist (4-step)</option>
+        <option value="offboarding">Offboarding (5-step)</option>
+      </select>
+      <div class="hint">Selecting a template pre-populates the workflow with standard steps.</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-danger btn-sm" onclick="closeModal('createModal')">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="createWorkflow()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Step Modal -->
+<div class="modal-overlay" id="addStepModal">
+  <div class="modal">
+    <h3>Add Approval Step</h3>
+    <div class="modal-field">
+      <label>Step Name</label>
+      <input type="text" id="newStepName" placeholder="e.g. Manager Review">
+    </div>
+    <div class="modal-field">
+      <label>Assignee</label>
+      <input type="text" id="newStepAssignee" placeholder="e.g. Reporting Manager">
+    </div>
+    <div class="modal-field">
+      <label>Escalation Threshold (hours)</label>
+      <input type="number" id="newStepEsc" value="24" min="0">
+      <div class="hint">A warning is shown if this step takes less than 1 hour to approve.</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-danger btn-sm" onclick="closeModal('addStepModal')">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="addStep()">Add Step</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = 'http://localhost:8080';
+let workflows = [], currentSteps = [], selectedWf = null, selectedStep = null;
+// Approval tracking: stepId -> { status: 'pending'|'approved', startedAt, approvedAt }
+let approvalState = {};
+let escLog = [];
+
+/* ── Predefined templates ── */
+const TEMPLATES = {
+  leave: [
+    { stepName:'Employee Submission',  assignee:'Employee',         escalationHours:24  },
+    { stepName:'Line Manager Review',  assignee:'Line Manager',     escalationHours:48  },
+    { stepName:'HR Final Approval',    assignee:'HR Admin',         escalationHours:24  },
+  ],
+  appraisal: [
+    { stepName:'Self Assessment',      assignee:'Employee',         escalationHours:48  },
+    { stepName:'Manager Review',       assignee:'Reporting Manager',escalationHours:72  },
+    { stepName:'Peer Feedback',        assignee:'Peers',            escalationHours:48  },
+    { stepName:'HR Evaluation',        assignee:'HR',               escalationHours:48  },
+    { stepName:'Final Rating Approval',assignee:'Senior Manager',   escalationHours:72  },
+    { stepName:'Employee Acknowledgement',assignee:'Employee',      escalationHours:24  },
+  ],
+  onboarding: [
+    { stepName:'Document Submission',  assignee:'New Employee',     escalationHours:48  },
+    { stepName:'IT Setup',             assignee:'IT Department',    escalationHours:24  },
+    { stepName:'Manager Induction',    assignee:'Line Manager',     escalationHours:24  },
+    { stepName:'HR Confirmation',      assignee:'HR Admin',         escalationHours:24  },
+  ],
+  offboarding: [
+    { stepName:'Resignation Received', assignee:'HR Admin',         escalationHours:24  },
+    { stepName:'Asset Return',         assignee:'IT Department',    escalationHours:48  },
+    { stepName:'Knowledge Transfer',   assignee:'Line Manager',     escalationHours:72  },
+    { stepName:'Final Settlement',     assignee:'Finance',          escalationHours:48  },
+    { stepName:'Exit Interview',       assignee:'HR Admin',         escalationHours:24  },
+  ]
+};
+
+/* ── Utilities ── */
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className='toast '+type; t.style.display='block';
+  clearTimeout(t._t); t._t = setTimeout(() => t.style.display='none', 4000);
+}
+
+function setServerStatus(ok) {
+  const b = document.getElementById('serverBadge');
+  b.textContent = ok ? 'Live (DB)' : 'Offline';
+  b.className   = ok ? 'badge badge-green' : 'badge badge-gray';
+}
+
+function elapsedStr(ms) {
+  if (ms < 60000) return Math.round(ms/1000) + 's';
+  if (ms < 3600000) return Math.round(ms/60000) + 'min';
+  return (ms/3600000).toFixed(1) + 'h';
+}
+
+/* ── API ── */
+async function loadWorkflows() {
+  try {
+    const res = await fetch(`${API}/api/workflows`);
+    if (!res.ok) throw new Error();
+    workflows = await res.json();
+    setServerStatus(true);
+  } catch {
+    workflows = [];
+    setServerStatus(false);
+  }
+  renderWorkflowList(workflows);
+}
+
+function renderWorkflowList(list) {
+  const el = document.getElementById('wfList');
+  if (!list.length) {
+    el.innerHTML = '<div class="empty-state"><h4>No workflows</h4>Create one to get started.</div>';
+    return;
+  }
+  el.innerHTML = list.map(w => `
+    <div class="wf-item ${selectedWf && selectedWf.workflowId===w.workflowId?'selected':''}"
+         onclick="selectWorkflow(${w.workflowId})">
+      <div class="wf-item-name">${w.workflowName}</div>
+      <div class="wf-item-meta">
+        <span class="badge ${w.currentStatus==='Active'?'badge-green':'badge-gray'}" style="font-size:10px">${w.currentStatus||'Inactive'}</span>
+        <span>${w.assignedTo||'—'}</span>
+      </div>
+    </div>`).join('');
+}
+
+async function selectWorkflow(id) {
+  selectedWf = workflows.find(w => w.workflowId === id);
+  selectedStep = null;
+  currentSteps = [];
+  if (!selectedWf) return;
+
+  // Init approval state for this workflow
+  const key = `wf_approval_${id}`;
+  approvalState = JSON.parse(localStorage.getItem(key) || '{}');
+
+  try {
+    const res = await fetch(`${API}/api/workflows/${id}/steps`);
+    if (!res.ok) throw new Error();
+    currentSteps = await res.json();
+    // Assign startedAt for each step not yet tracked
+    currentSteps.forEach((s, i) => {
+      if (!approvalState[s.stepId]) {
+        approvalState[s.stepId] = {
+          status: i === 0 ? 'current' : 'pending',
+          startedAt: i === 0 ? Date.now() : null,
+          approvedAt: null
+        };
+      }
+    });
+    saveApprovalState(id);
+  } catch {
+    // Fallback demo data
+    currentSteps = [
+      {stepId:101, workflowId:id, stepName:'Submission',   assignee:'Employee',     escalationHours:24},
+      {stepId:102, workflowId:id, stepName:'Review',        assignee:'Manager',      escalationHours:48},
+      {stepId:103, workflowId:id, stepName:'HR Approval',   assignee:'HR Admin',     escalationHours:24},
+    ];
+    currentSteps.forEach((s,i) => {
+      if (!approvalState[s.stepId]) {
+        approvalState[s.stepId] = {status: i===0?'current':'pending', startedAt: i===0?Date.now():null, approvedAt:null};
+      }
+    });
+  }
+
+  document.getElementById('centerActions').style.display = 'flex';
+  document.getElementById('centerTitle').textContent = `Workflow Engine — ${selectedWf.workflowName}`;
+  document.getElementById('toggleStatusBtn').textContent = selectedWf.currentStatus==='Active' ? 'Deactivate' : 'Activate';
+  renderWorkflowList(workflows);
+  renderCanvas();
+  renderDetails();
+  checkEscalationWarnings();
+}
+
+function saveApprovalState(wfId) {
+  localStorage.setItem(`wf_approval_${wfId}`, JSON.stringify(approvalState));
+}
+
+/* ── Approve Step ── */
+function approveCurrentStep() {
+  if (!selectedWf || !currentSteps.length) { showToast('No workflow selected.', 'error'); return; }
+
+  const currentIdx = currentSteps.findIndex(s =>
+    approvalState[s.stepId] && approvalState[s.stepId].status === 'current'
+  );
+  if (currentIdx === -1) {
+    showToast('All steps have been approved!', 'success'); return;
+  }
+
+  const step = currentSteps[currentIdx];
+  const state = approvalState[step.stepId];
+  const now = Date.now();
+  const elapsed = state.startedAt ? (now - state.startedAt) : 0;
+
+  // Warn if approved too fast (< 1 hour = 3600000ms) — configurable threshold
+  const THRESHOLD_MS = 3600000; // 1 hour
+  if (elapsed < THRESHOLD_MS && state.startedAt) {
+    const elStr = elapsedStr(elapsed);
+    const proceed = confirm(
+      `Warning: Step "${step.stepName}" is being approved after only ${elStr}.\n\n` +
+      `The escalation threshold is ${step.escalationHours}h. Approving this quickly may indicate the step was not properly reviewed.\n\n` +
+      `Proceed with approval anyway?`
+    );
+    if (!proceed) return;
+
+    // Log the fast approval
+    const logEntry = `[${new Date().toLocaleTimeString()}] FAST APPROVAL: "${step.stepName}" approved in ${elStr} (threshold: ${step.escalationHours}h)`;
+    escLog.push(logEntry);
+    document.getElementById('escLog').innerHTML = escLog.map(e =>
+      `<div style="margin-bottom:6px;padding:5px 8px;background:#fef3c7;border-radius:5px">${e}</div>`
+    ).join('');
+  }
+
+  // Mark current step as approved
+  approvalState[step.stepId] = { ...state, status:'approved', approvedAt: now };
+
+  // Advance to next step
+  if (currentIdx + 1 < currentSteps.length) {
+    const next = currentSteps[currentIdx + 1];
+    approvalState[next.stepId] = { status:'current', startedAt: now, approvedAt: null };
+    showToast(`Step "${step.stepName}" approved. Next: "${next.stepName}"`);
+  } else {
+    showToast(`All steps approved! Workflow "${selectedWf.workflowName}" is complete.`, 'success');
+  }
+
+  saveApprovalState(selectedWf.workflowId);
+  renderCanvas();
+  renderDetails();
+  checkEscalationWarnings();
+}
+
+/* ── Escalation checks ── */
+function checkEscalationWarnings() {
+  currentSteps.forEach(s => {
+    const state = approvalState[s.stepId];
+    if (state && state.status === 'current' && state.startedAt && s.escalationHours > 0) {
+      const elapsed = Date.now() - state.startedAt;
+      const threshold = s.escalationHours * 3600000;
+      if (elapsed > threshold) {
+        const logEntry = `[${new Date().toLocaleTimeString()}] ESCALATION: "${s.stepName}" exceeded ${s.escalationHours}h threshold (elapsed: ${elapsedStr(elapsed)})`;
+        if (!escLog.includes(logEntry)) {
+          escLog.push(logEntry);
+          document.getElementById('escLog').innerHTML = escLog.map(e =>
+            `<div style="margin-bottom:6px;padding:5px 8px;background:#fee2e2;border-radius:5px">${e}</div>`
+          ).join('');
+          showToast(`Escalation: "${s.stepName}" overdue!`, 'warning');
+        }
+      }
+    }
+  });
+}
+
+/* ── Render canvas ── */
+function renderCanvas() {
+  const canvas = document.getElementById('canvas');
+  if (!selectedWf) { canvas.innerHTML = '<div class="empty-state"><h4>Select a workflow</h4></div>'; return; }
+  if (!currentSteps.length) { canvas.innerHTML = '<div class="empty-state"><h4>No steps yet</h4>Add your first approval step.</div>'; return; }
+
+  // Step flow diagram
+  const flowHtml = currentSteps.map((s, i) => {
+    const state = approvalState[s.stepId] || { status:'pending' };
+    const cls = state.status === 'approved' ? 'approved' : (state.status === 'current' ? 'current-step' : '');
+    const numCls = state.status === 'approved' ? 'approved' : (state.status === 'current' ? 'current' : '');
+    const elapsed = state.startedAt && state.status === 'current'
+      ? `<div class="step-elapsed">Elapsed: ${elapsedStr(Date.now()-state.startedAt)}</div>` : '';
+    const approvedAt = state.approvedAt
+      ? `<div class="step-elapsed" style="color:var(--success)">Done</div>` : '';
+    return `
+      <div class="step-box ${cls} ${selectedStep && selectedStep.stepId===s.stepId?'selected-step':''}"
+           onclick="selectStep(${s.stepId})">
+        <span class="step-num ${numCls}">${i+1}</span>
+        <div class="step-name">${s.stepName}</div>
+        <div class="step-assignee">${s.assignee||'—'}</div>
+        ${s.escalationHours>0 ? `<div class="step-esc">${s.escalationHours}h</div>` : ''}
+        ${elapsed}${approvedAt}
+      </div>
+      ${i < currentSteps.length-1 ? '<div class="step-arrow">→</div>' : ''}`;
+  }).join('');
+
+  // Progress summary
+  const approvedCount = currentSteps.filter(s => approvalState[s.stepId]?.status === 'approved').length;
+  const currentStep   = currentSteps.find(s => approvalState[s.stepId]?.status === 'current');
+
+  // Steps table
+  const tableHtml = `
+    <table class="steps-tbl">
+      <thead><tr><th>Step Name</th><th>Assignee</th><th>Escalation</th><th>Status</th><th>Elapsed</th><th>Action</th></tr></thead>
+      <tbody>
+        ${currentSteps.map(s => {
+          const st = approvalState[s.stepId] || {};
+          const elapsed = st.startedAt && st.status === 'current' ? elapsedStr(Date.now()-st.startedAt) : (st.approvedAt && st.startedAt ? elapsedStr(st.approvedAt-st.startedAt) : '—');
+          const statusLabel = st.status==='approved' ? 'approved' : (st.status==='current' ? 'current' : 'pending');
+          return `<tr>
+            <td>${s.stepName}</td>
+            <td>${s.assignee||'—'}</td>
+            <td>${s.escalationHours>0 ? s.escalationHours+'h' : '—'}</td>
+            <td><span class="status-chip status-${statusLabel}">${statusLabel.toUpperCase()}</span></td>
+            <td>${elapsed}</td>
+            <td><button class="btn btn-danger btn-sm" onclick="removeStep(${s.stepId})">Remove</button></td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+
+  const progressBar = `
+    <div style="background:#fff;border-radius:var(--radius);padding:14px;margin-bottom:16px;box-shadow:var(--shadow)">
+      <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin-bottom:8px">
+        <span>Progress: ${approvedCount}/${currentSteps.length} steps approved</span>
+        <span>${currentStep ? 'Current: ' + currentStep.stepName : (approvedCount===currentSteps.length?'Complete!':'—')}</span>
+      </div>
+      <div style="background:var(--gray-200);border-radius:10px;height:6px">
+        <div style="background:var(--success);border-radius:10px;height:6px;width:${(approvedCount/currentSteps.length*100).toFixed(0)}%;transition:width .4s"></div>
+      </div>
+    </div>`;
+
+  canvas.innerHTML = `
+    <p style="font-size:11px;color:var(--gray-400);margin-bottom:12px">APPROVAL FLOW — ${currentSteps.length} STEPS (click a step to select)</p>
+    <div class="step-flow">${flowHtml}</div>
+    ${progressBar}
+    ${tableHtml}`;
+
+  // Update approve button label
+  const approveBtn = document.getElementById('approveBtn');
+  if (approveBtn && currentStep) {
+    approveBtn.textContent = `Approve: ${currentStep.stepName}`;
+    approveBtn.disabled = false;
+  } else if (approveBtn) {
+    approveBtn.textContent = approvedCount===currentSteps.length?'All Approved':'Approve Step';
+    approveBtn.disabled = approvedCount===currentSteps.length;
+  }
+}
+
+function selectStep(stepId) {
+  selectedStep = currentSteps.find(s => s.stepId === stepId);
+  const state = approvalState[stepId] || {};
+  const detail = document.getElementById('stepDetail');
+  if (!selectedStep) return;
+  const elapsed = state.startedAt
+    ? (state.status==='current' ? elapsedStr(Date.now()-state.startedAt) : (state.approvedAt ? elapsedStr(state.approvedAt-state.startedAt) : '—'))
+    : '—';
+  detail.innerHTML = `
+    <div class="drow"><div class="dlabel">Name</div><div class="dvalue">${selectedStep.stepName}</div></div>
+    <div class="drow"><div class="dlabel">Assignee</div><div class="dvalue">${selectedStep.assignee||'—'}</div></div>
+    <div class="drow"><div class="dlabel">Escalation</div><div class="dvalue">${selectedStep.escalationHours>0?selectedStep.escalationHours+'h':'None'}</div></div>
+    <div class="drow"><div class="dlabel">Status</div><div class="dvalue">${state.status||'pending'}</div></div>
+    <div class="drow"><div class="dlabel">Elapsed</div><div class="dvalue">${elapsed}</div></div>
+    <button class="btn btn-danger btn-sm" style="width:100%;margin-top:8px" onclick="removeStep(${selectedStep.stepId})">Remove Step</button>`;
+  renderCanvas();
+}
+
+function renderDetails() {
+  if (!selectedWf) return;
+  const approvedCount = currentSteps.filter(s => approvalState[s.stepId]?.status === 'approved').length;
+  document.getElementById('detailContent').innerHTML = `
+    <div class="drow"><div class="dlabel">Name</div><div class="dvalue">${selectedWf.workflowName}</div></div>
+    <div class="drow"><div class="dlabel">Status</div><div class="dvalue">${selectedWf.currentStatus||'Inactive'}</div></div>
+    <div class="drow"><div class="dlabel">Assigned To</div><div class="dvalue">${selectedWf.assignedTo||'—'}</div></div>
+    <div class="drow"><div class="dlabel">Steps</div><div class="dvalue">${currentSteps.length}</div></div>
+    <div class="drow"><div class="dlabel">Approved</div><div class="dvalue">${approvedCount} / ${currentSteps.length}</div></div>`;
+}
+
+/* ── CRUD operations ── */
+async function createWorkflow() {
+  const name     = document.getElementById('newWfName').value.trim();
+  const assignee = document.getElementById('newWfAssignee').value.trim() || 'HR Admin';
+  const template = document.getElementById('predefinedTemplate').value;
+
+  if (!name) { showToast('Workflow name is required.', 'error'); return; }
+
+  let newWfId;
+  try {
+    const res = await fetch(`${API}/api/workflows/create`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ name: name, assignedTo: assignee })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Create failed');
+    newWfId = data.workflowId || data.id;
+  } catch (err) {
+    showToast(err.message || 'Unable to create workflow. Server offline?', 'error'); return;
+  }
+
+  // Add template steps if selected
+  if (template && TEMPLATES[template]) {
+    for (const step of TEMPLATES[template]) {
+      try {
+        await fetch(`${API}/api/workflows/addstep`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ workflowId: newWfId, ...step })
+        });
+      } catch {}
+    }
+    showToast(`Workflow "${name}" created with ${TEMPLATES[template].length} predefined steps.`);
+  } else {
+    showToast(`Workflow "${name}" created.`);
+  }
+
+  document.getElementById('newWfName').value = '';
+  document.getElementById('newWfAssignee').value = '';
+  document.getElementById('predefinedTemplate').value = '';
+  closeModal('createModal');
+  await loadWorkflows();
+  if (newWfId) await selectWorkflow(newWfId);
+}
+
+async function addStep() {
+  const stepName = document.getElementById('newStepName').value.trim();
+  const assignee = document.getElementById('newStepAssignee').value.trim() || 'Unassigned';
+  const escalationHours = parseInt(document.getElementById('newStepEsc').value) || 24;
+
+  if (!stepName) { showToast('Step name is required.', 'error'); return; }
+  if (!selectedWf) { showToast('Select a workflow first.', 'error'); return; }
+
+  // Warn if escalation is < 1 hour
+  if (escalationHours < 1) {
+    showToast('Warning: escalation threshold is less than 1 hour. This is very short.', 'warning');
+  }
+
+  try {
+    const res = await fetch(`${API}/api/workflows/addstep`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ workflowId: selectedWf.workflowId, stepName, assignee, escalationHours })
+    });
+    if (!res.ok) throw new Error('Add step failed');
+    showToast(`Step "${stepName}" added.`);
+    closeModal('addStepModal');
+    document.getElementById('newStepName').value = '';
+    await selectWorkflow(selectedWf.workflowId);
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+async function removeStep(stepId) {
+  if (!confirm('Remove this step from the workflow?')) return;
+  try {
+    const res = await fetch(`${API}/api/workflows/removestep`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ stepId })
+    });
+    if (!res.ok) throw new Error('Remove failed');
+    showToast('Step removed.');
+    delete approvalState[stepId];
+    saveApprovalState(selectedWf.workflowId);
+    await selectWorkflow(selectedWf.workflowId);
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+async function toggleStatus() {
+  if (!selectedWf) return;
+  const newStatus = selectedWf.currentStatus === 'Active' ? 'Inactive' : 'Active';
+  try {
+    const res = await fetch(`${API}/api/workflows/status`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ workflowId: selectedWf.workflowId, status: newStatus })
+    });
+    if (!res.ok) throw new Error();
+    selectedWf.currentStatus = newStatus;
+    document.getElementById('toggleStatusBtn').textContent = newStatus==='Active' ? 'Deactivate' : 'Activate';
+    showToast(`Workflow set to ${newStatus}.`);
+    await loadWorkflows();
+    renderDetails();
+  } catch {
+    showToast('Failed to update status.', 'error');
+  }
+}
+
+async function deleteWorkflow() {
+  if (!selectedWf) return;
+  if (!confirm(`Delete workflow "${selectedWf.workflowName}"?`)) return;
+  try {
+    const res = await fetch(`${API}/api/workflows/delete`, { 
+      method:'POST', 
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ workflowId: selectedWf.workflowId })
+    });
+    if (!res.ok) throw new Error();
+    showToast('Workflow deleted.');
+    localStorage.removeItem(`wf_approval_${selectedWf.workflowId}`);
+    selectedWf = null; currentSteps = []; approvalState = {};
+    document.getElementById('centerActions').style.display = 'none';
+    document.getElementById('centerTitle').textContent = 'Select a workflow';
+    document.getElementById('canvas').innerHTML = '<div class="empty-state"><h4>No workflow selected</h4></div>';
+    document.getElementById('detailContent').innerHTML = '<p style="font-size:12px;color:var(--gray-400)">Select a workflow.</p>';
+    await loadWorkflows();
+  } catch {
+    showToast('Failed to delete.', 'error');
+  }
+}
+
+function filterWorkflows() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  renderWorkflowList(workflows.filter(w => w.workflowName.toLowerCase().includes(q)));
+}
+
+function openCreateModal()  { document.getElementById('createModal').classList.add('open'); }
+function openAddStepModal() {
+  if (!selectedWf) { showToast('Select a workflow first.', 'error'); return; }
+  document.getElementById('addStepModal').classList.add('open');
+}
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// Auto-refresh elapsed times every 30 seconds
+setInterval(() => { if (selectedWf) { renderCanvas(); checkEscalationWarnings(); } }, 30000);
+
+loadWorkflows();
+</script>
+</body>
+</html>

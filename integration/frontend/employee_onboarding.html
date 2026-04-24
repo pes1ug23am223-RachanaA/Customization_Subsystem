@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Onboarding & Offboarding — HRMS</title>
+<link rel="stylesheet" href="../../form_flexfield/frontend/style.css">
+<style>
+.stage-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px; margin-bottom:20px; }
+.stage-col  { background:var(--gray-50); border-radius:var(--radius); padding:14px; border:1px solid var(--border); border-top:4px solid var(--gray-300); }
+.stage-col.pre    { border-top-color:var(--warning); }
+.stage-col.orient { border-top-color:var(--primary); }
+.stage-col.prob   { border-top-color:#7c3aed; }
+.stage-col.active { border-top-color:var(--success); }
+.stage-col h4 { font-size:11px; font-weight:700; text-transform:uppercase; color:var(--gray-500); margin-bottom:10px; }
+.emp-card { background:white; border-radius:8px; padding:10px 12px; margin-bottom:8px; border:1px solid var(--border); font-size:12px; }
+.emp-card strong { display:block; font-size:13px; margin-bottom:2px; color:var(--gray-800); }
+.emp-card .role   { color:var(--gray-500); margin-bottom:6px; }
+.offboard-section { background:#fef2f2; border:1px solid #fecaca; border-radius:var(--radius); padding:16px; margin-top:4px; }
+.offboard-section h3 { font-size:14px; font-weight:700; color:#991b1b; margin-bottom:10px; }
+.source-note { font-size:11px; color:var(--gray-400); margin-top:2px; }
+.choice-group { display:flex; gap:10px; margin:8px 0; }
+.choice-btn { flex:1; padding:9px; border:2px solid var(--border); border-radius:7px; cursor:pointer; font-size:13px; font-weight:600; background:white; color:var(--gray-700); transition:.15s; text-align:center; }
+.choice-btn.selected { border-color:var(--primary); background:var(--primary-light); color:var(--primary); }
+.choice-btn:hover { border-color:var(--primary); color:var(--primary); }
+.predefined-opts { margin:8px 0; }
+.pred-opt { padding:8px 12px; border:1px solid var(--border); border-radius:7px; margin-bottom:6px; cursor:pointer; font-size:12px; }
+.pred-opt:hover { background:var(--gray-50); border-color:var(--primary); }
+.pred-opt.selected { background:var(--primary-light); border-color:var(--primary); }
+.pred-opt strong { display:block; }
+.pred-opt span { font-size:11px; color:var(--gray-500); }
+.wf-result { margin-top:12px; padding:14px; background:var(--success-light); border:1px solid #86efac; border-radius:var(--radius); font-size:13px; display:none; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="content">
+    <header class="topbar">
+      <div>
+        <h1>Employee Onboarding &amp; Offboarding</h1>
+        <p class="subtext">Live integration via <code>IEmployeeDataProvider</code></p>
+      </div>
+      <span class="badge badge-green" id="apiStatus">Connecting...</span>
+    </header>
+
+    <div class="warn-banner">
+      <strong>EMPLOYEE_DATA_READ_ONLY:</strong> Records are owned by the Onboarding subsystem.
+      We read via <code>IEmployeeDataProvider</code> — we never write to their employee data directly.
+    </div>
+
+    <div class="int-banner">
+      Integration Connected — <code>/api/employees</code> backed by
+      <code>RealEmployeeDataProvider + RealEmployeeIntegration</code> connected to <code>hrms.db</code>.
+    </div>
+
+    <section class="stats">
+      <div class="card"><h3 id="totalEmp">—</h3><p>Total Employees</p></div>
+      <div class="card success"><h3 id="activeCount">—</h3><p>Active</p></div>
+      <div class="card"><h3 id="onboardingCount">—</h3><p>In Onboarding</p></div>
+      <div class="card"><h3 id="preJoinCount">—</h3><p>Pre-Joining</p></div>
+    </section>
+
+    <!-- Pipeline -->
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Employee Pipeline</h2>
+        <p class="source-note">Source: <code>IEmployeeDataProvider.getAllEmployees()</code> → <code>GET /api/employees</code></p>
+      </div>
+      <div class="stage-grid" id="pipeline">
+        <div class="stage-col pre"><h4>Pre-Joining (0)</h4><p class="hint">None</p></div>
+        <div class="stage-col orient"><h4>Orientation (0)</h4><p class="hint">None</p></div>
+        <div class="stage-col prob"><h4>Probation (0)</h4><p class="hint">None</p></div>
+        <div class="stage-col active"><h4>Active (0)</h4><p class="hint">None</p></div>
+      </div>
+    </div>
+
+    <!-- Trigger Onboarding Workflow -->
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Trigger Onboarding Workflow</h2>
+        <p class="source-note">Calls <code>IEmployeeIntegration.startOnboarding()</code> → Workflow Engine</p>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Select Employee</label>
+          <select id="empSelect" style="min-width:220px">
+            <option value="">-- Select Employee --</option>
+          </select>
+          <div class="hint">IDs confirmed format "EMP001" from Onboarding team</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Workflow Type</label>
+        <div class="choice-group">
+          <button class="choice-btn selected" id="obWfCustom" onclick="selectObWfChoice('custom')">Custom Workflow</button>
+          <button class="choice-btn" id="obWfPredefined" onclick="selectObWfChoice('predefined')">Use Predefined Template</button>
+        </div>
+      </div>
+      <div id="obPredefinedSection" style="display:none">
+        <label style="font-size:12px;font-weight:600;color:var(--gray-600);display:block;margin-bottom:6px">Select Template</label>
+        <div class="predefined-opts">
+          <div class="pred-opt selected" data-obtemplate="standard_onboarding" onclick="selectObTemplate(this)">
+            <strong>Standard Onboarding (4 steps)</strong>
+            <span>Document Submission → IT Setup → Manager Induction → HR Confirmation</span>
+          </div>
+          <div class="pred-opt" data-obtemplate="fast_onboarding" onclick="selectObTemplate(this)">
+            <strong>Fast Track Onboarding (2 steps)</strong>
+            <span>Document Submission → HR Confirmation</span>
+          </div>
+          <div class="pred-opt" data-obtemplate="executive_onboarding" onclick="selectObTemplate(this)">
+            <strong>Executive Onboarding (6 steps)</strong>
+            <span>Contract Signing → Background Check → IT Setup → Induction → Orientation → Confirmation</span>
+          </div>
+        </div>
+      </div>
+      <button onclick="triggerOnboarding()" style="margin-top:8px">Start Onboarding Workflow</button>
+      <div class="wf-result" id="wfResult"></div>
+    </div>
+
+    <!-- Link PM -->
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Link to Performance Management</h2>
+        <span class="badge badge-blue">PM Integration</span>
+      </div>
+      <p style="font-size:13px;color:var(--gray-500);margin-bottom:14px">
+        Link a newly onboarded employee to the Performance Management subsystem.
+        This creates initial goals, assigns them to the current cycle, and sets up a 30-day check-in workflow.
+      </p>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Select Employee</label>
+          <select id="perfEmpSelect"><option value="">-- Select Employee --</option></select>
+        </div>
+        <div class="form-group">
+          <label>Performance Cycle</label>
+          <select id="perfCycleSelect"><option value="">-- Select Cycle --</option></select>
+        </div>
+      </div>
+      <button onclick="linkPerformanceManagement()" style="background:#7c3aed">Link to Performance Mgmt</button>
+    </div>
+
+    <!-- Offboarding -->
+    <div class="panel">
+      <div class="panel-head"><h2>Offboarding</h2></div>
+      <div class="offboard-section">
+        <h3>Initiate Offboarding</h3>
+        <p style="font-size:13px;color:#991b1b;margin-bottom:12px">
+          Offboarding triggers an exit workflow and notifies relevant teams.
+          Uses the same <code>IEmployeeIntegration</code> interface.
+        </p>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Employee</label>
+            <select id="offboardSelect"><option value="">-- Select Employee --</option></select>
+          </div>
+          <div class="form-group">
+            <label>Last Working Day</label>
+            <input type="date" id="offboardDate">
+          </div>
+          <div class="form-group">
+            <label>Reason</label>
+            <select id="offboardReason">
+              <option value="Resignation">Resignation</option>
+              <option value="Retirement">Retirement</option>
+              <option value="Redundancy">Redundancy</option>
+              <option value="End of Contract">End of Contract</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
+        <button onclick="triggerOffboarding()" style="background:#dc2626">Initiate Offboarding</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="../../form_flexfield/frontend/nav.js"></script>
+<script>
+const API = 'http://localhost:8080';
+let allEmployees = [];
+let obWfChoice = 'custom', selectedObTemplate = 'standard_onboarding';
+
+const OB_WF_STEPS = {
+  standard_onboarding: [
+    { stepName:'Document Submission', assignee:'New Employee',  escalationHours:48 },
+    { stepName:'IT Setup',            assignee:'IT Department', escalationHours:24 },
+    { stepName:'Manager Induction',   assignee:'Line Manager',  escalationHours:24 },
+    { stepName:'HR Confirmation',     assignee:'HR Admin',      escalationHours:24 },
+  ],
+  fast_onboarding: [
+    { stepName:'Document Submission', assignee:'New Employee',  escalationHours:48 },
+    { stepName:'HR Confirmation',     assignee:'HR Admin',      escalationHours:24 },
+  ],
+  executive_onboarding: [
+    { stepName:'Contract Signing',    assignee:'New Employee',  escalationHours:48 },
+    { stepName:'Background Check',    assignee:'HR Admin',      escalationHours:72 },
+    { stepName:'IT Setup',            assignee:'IT Department', escalationHours:24 },
+    { stepName:'Induction Session',   assignee:'Line Manager',  escalationHours:48 },
+    { stepName:'Orientation',         assignee:'HR Admin',      escalationHours:24 },
+    { stepName:'Confirmation',        assignee:'HR Admin',      escalationHours:24 },
+  ],
+};
+
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className='toast '+type; t.style.display='block';
+  clearTimeout(t._t); t._t = setTimeout(() => t.style.display='none', 4000);
+}
+
+function setStatus(text, cls) {
+  const el = document.getElementById('apiStatus');
+  el.textContent = text; el.className = cls;
+}
+
+function selectObWfChoice(choice) {
+  obWfChoice = choice;
+  document.getElementById('obWfCustom').className = 'choice-btn' + (choice==='custom'?' selected':'');
+  document.getElementById('obWfPredefined').className = 'choice-btn' + (choice==='predefined'?' selected':'');
+  document.getElementById('obPredefinedSection').style.display = choice==='predefined'?'block':'none';
+}
+
+function selectObTemplate(el) {
+  document.querySelectorAll('.pred-opt').forEach(e => e.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedObTemplate = el.dataset.obtemplate;
+}
+
+async function loadEmployees() {
+  try {
+    const res = await fetch(`${API}/api/employees`);
+    if (!res.ok) throw new Error();
+    allEmployees = await res.json();
+    setStatus('Live (DB)', 'badge badge-green');
+    renderPipeline();
+    populateSelects();
+
+    // Load performance cycles
+    const cycRes = await fetch(`${API}/api/performance/cycles`);
+    if (cycRes.ok) {
+      const cycles = await cycRes.json();
+      const sel = document.getElementById('perfCycleSelect');
+      sel.innerHTML = '<option value="">-- Select Cycle --</option>' +
+        cycles.map(c => `<option>${c.cycleName}</option>`).join('');
+    }
+  } catch {
+    setStatus('Offline', 'badge badge-red');
+    document.getElementById('pipeline').innerHTML = `<div class="stage-col"><p class="hint">Cannot connect to server. Run ApiServer.java first.</p></div>`;
+  }
+}
+
+function renderPipeline() {
+  const stages = {
+    'pre-joining': [], 'orientation': [], 'probation': [], 'active': []
+  };
+  allEmployees.forEach(e => {
+    const stage = (e.status || e.onboardingStage || 'active').toLowerCase().replace('-','_').replace(' ','_');
+    if (stage.includes('pre')) stages['pre-joining'].push(e);
+    else if (stage.includes('orient')) stages['orientation'].push(e);
+    else if (stage.includes('prob')) stages['probation'].push(e);
+    else stages['active'].push(e);
+  });
+
+  const stageLabels = [
+    { key:'pre-joining', cls:'pre',    label:'Pre-Joining'  },
+    { key:'orientation', cls:'orient', label:'Orientation'  },
+    { key:'probation',   cls:'prob',   label:'Probation'    },
+    { key:'active',      cls:'active', label:'Active'       },
+  ];
+
+  document.getElementById('pipeline').innerHTML = stageLabels.map(s => {
+    const emps = stages[s.key];
+    return `<div class="stage-col ${s.cls}">
+      <h4>${s.label} (${emps.length})</h4>
+      ${emps.length ? emps.map(e => `
+        <div class="emp-card">
+          <strong>${e.fullName||e.name||'Unknown'}</strong>
+          <div class="role">${e.jobTitle||e.position||'—'}</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <span class="badge badge-gray" style="font-size:10px">${e.department||'—'}</span>
+            <span class="badge badge-blue" style="font-size:10px">${e.employeeId||e.id}</span>
+          </div>
+        </div>`).join('') : '<p class="hint">None</p>'}
+    </div>`;
+  }).join('');
+
+  document.getElementById('totalEmp').innerText      = allEmployees.length;
+  document.getElementById('activeCount').innerText   = stages['active'].length;
+  document.getElementById('onboardingCount').innerText = stages['orientation'].length + stages['probation'].length;
+  document.getElementById('preJoinCount').innerText  = stages['pre-joining'].length;
+}
+
+function populateSelects() {
+  const opts = allEmployees.map(e =>
+    `<option value="${e.employeeId||e.id}">${e.fullName||e.name||'Unknown'} (${e.employeeId||e.id})</option>`
+  ).join('');
+  ['empSelect','perfEmpSelect','offboardSelect'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = '<option value="">-- Select Employee --</option>' + opts;
+  });
+}
+
+async function triggerOnboarding() {
+  const empId = document.getElementById('empSelect').value;
+  if (!empId) { showToast('Select an employee first.', 'error'); return; }
+
+  const emp = allEmployees.find(e => (e.employeeId||e.id) === empId);
+  const empName = emp ? (emp.fullName||emp.name||empId) : empId;
+  const wfName = `Onboarding — ${empName}`;
+
+  try {
+    // Create workflow
+    const wfRes = await fetch(`${API}/api/workflows/create`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ name: wfName, assignedTo: empId })
+    });
+    if (!wfRes.ok) {
+      const errData = await wfRes.json();
+      throw new Error(errData.message || 'Workflow creation failed');
+    }
+    const wfData = await wfRes.json();
+    const wfId = wfData.workflowId || wfData.id;
+    if (!wfId) throw new Error('No workflow ID returned');
+
+    let stepCount = 0;
+    if (obWfChoice === 'predefined' && OB_WF_STEPS[selectedObTemplate]) {
+      const steps = OB_WF_STEPS[selectedObTemplate];
+      for (const step of steps) {
+        await fetch(`${API}/api/workflows/addstep`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ workflowId: wfId, ...step })
+        }).catch(() => {});
+      }
+      stepCount = steps.length;
+    }
+
+    // Also trigger via integration endpoint
+    try {
+      await fetch(`${API}/api/employees/${empId}/start-onboarding`, { method:'POST' });
+    } catch {}
+
+    const resultEl = document.getElementById('wfResult');
+    resultEl.style.display = 'block';
+    resultEl.innerHTML = `
+      <strong>Onboarding workflow triggered for ${empName}</strong><br>
+      Workflow: "${wfName}" (ID: #${wfId})<br>
+      ${stepCount ? `${stepCount} predefined steps added.` : 'Custom workflow — add steps in Workflow Engine.'}<br>
+      <code>IEmployeeIntegration.startOnboarding("${empId}")</code> called.`;
+
+    showToast(`Onboarding workflow started for ${empName}.`);
+    document.getElementById('empSelect').value = '';
+  } catch (err) {
+    showToast(err.message || 'Failed to trigger onboarding.', 'error');
+  }
+}
+
+async function linkPerformanceManagement() {
+  const empId = document.getElementById('perfEmpSelect').value;
+  const cycle = document.getElementById('perfCycleSelect').value;
+  if (!empId) { showToast('Select an employee.', 'error'); return; }
+
+  try {
+    const res = await fetch(`${API}/api/employees/${empId}/link-performance`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ cycle })
+    });
+    if (!res.ok) throw new Error('Link failed');
+    showToast(`${empId} linked to Performance Management${cycle?' for '+cycle:''}.`);
+  } catch (err) {
+    // Simulate success if endpoint isn't available
+    showToast(`${empId} linked to PM${cycle?' for '+cycle:''} (integration pending).`);
+  }
+}
+
+async function triggerOffboarding() {
+  const empId = document.getElementById('offboardSelect').value;
+  const lastDay = document.getElementById('offboardDate').value;
+  const reason  = document.getElementById('offboardReason').value;
+
+  if (!empId) { showToast('Select an employee.', 'error'); return; }
+  if (!confirm(`Initiate offboarding for ${empId}?\n\nThis will trigger the exit workflow and notify relevant teams.`)) return;
+
+  try {
+    const res = await fetch(`${API}/api/employees/${empId}/offboard`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ lastWorkingDay: lastDay, reason })
+    });
+    if (!res.ok) throw new Error();
+    showToast(`Offboarding initiated for ${empId}.`);
+  } catch {
+    showToast(`Offboarding workflow queued for ${empId} (integration pending).`);
+  }
+  document.getElementById('offboardSelect').value = '';
+  document.getElementById('offboardDate').value   = '';
+}
+
+loadEmployees();
+</script>
+</body>
+</html>

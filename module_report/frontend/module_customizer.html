@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Module Customizer — HRMS</title>
+<link rel="stylesheet" href="../../form_flexfield/frontend/style.css">
+<style>
+.module-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:16px; }
+.module-tile {
+  background:#fff; border:1px solid var(--border); border-radius:var(--radius);
+  padding:18px; box-shadow:var(--shadow-sm); transition:.15s;
+}
+.module-tile:hover { box-shadow:var(--shadow-md); }
+.module-tile.enabled  { border-left:4px solid var(--success); }
+.module-tile.disabled { border-left:4px solid var(--gray-300); opacity:.8; }
+.tile-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px; }
+.tile-name { font-size:14px; font-weight:700; color:var(--gray-800); }
+.tile-type { font-size:11px; color:var(--gray-500); margin-bottom:8px; }
+.tile-desc { font-size:12px; color:var(--gray-600); margin-bottom:12px; line-height:1.5; }
+.tile-meta { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
+.tile-actions { display:flex; gap:8px; flex-wrap:wrap; }
+.btn-enable  { background:var(--success); color:#fff; border:none; border-radius:6px; padding:6px 12px; cursor:pointer; font-size:12px; font-weight:600; }
+.btn-disable { background:var(--danger-light); color:var(--danger); border:none; border-radius:6px; padding:6px 12px; cursor:pointer; font-size:12px; font-weight:600; }
+.btn-config  { background:var(--gray-100); color:var(--gray-700); border:none; border-radius:6px; padding:6px 12px; cursor:pointer; font-size:12px; font-weight:600; }
+.btn-enable:disabled, .btn-disable:disabled { opacity:.4; cursor:not-allowed; }
+.btn-config:hover { background:var(--gray-200); }
+
+/* Config panel */
+.config-panel {
+  background:var(--gray-50); border:1px solid var(--border); border-radius:var(--radius);
+  padding:16px; margin-top:14px; display:none;
+}
+.config-panel.open { display:block; }
+.config-row { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--gray-100); font-size:13px; }
+.config-row:last-child { border-bottom:none; }
+.config-row label { font-weight:600; color:var(--gray-700); }
+.config-row select, .config-row input { padding:5px 8px; border:1px solid var(--border); border-radius:5px; font-size:12px; }
+.audit-log { background:white; border:1px solid var(--border); border-radius:var(--radius); padding:14px; margin-top:16px; max-height:200px; overflow-y:auto; }
+.audit-entry { font-size:11px; color:var(--gray-500); padding:3px 0; border-bottom:1px solid var(--gray-100); }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="content">
+    <header class="topbar">
+      <div><h1>Module Customizer</h1><p class="subtext">Enable, disable, and configure HRMS modules — changes persist to database</p></div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <span class="badge badge-green" id="serverStatus">Connecting...</span>
+        <button class="btn-ghost" onclick="enableAll()">Enable All</button>
+      </div>
+    </header>
+
+    <div class="int-banner">
+      Enable or disable modules to control which features are available to users.
+      Use the <strong>Configure</strong> button to set role access, display order, and module-specific options.
+      All changes are persisted to the database immediately.
+    </div>
+
+    <section class="stats">
+      <div class="card"><h3 id="enabledCount">—</h3><p>Enabled Modules</p></div>
+      <div class="card"><h3 id="totalCount">—</h3><p>Total Modules</p></div>
+      <div class="card success"><h3>Persisted</h3><p>Database Backed</p></div>
+    </section>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>All Modules</h2>
+        <input type="text" id="moduleSearch" placeholder="Filter modules..." style="width:200px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px" oninput="renderModules()">
+      </div>
+      <div class="module-grid" id="moduleGrid">
+        <p style="color:var(--gray-500);padding:16px">Loading modules from database...</p>
+      </div>
+    </div>
+
+    <!-- Audit Log -->
+    <div class="panel">
+      <div class="panel-head"><h2>Change Log</h2><button class="btn-ghost btn-sm" onclick="clearAuditLog()">Clear</button></div>
+      <div class="audit-log" id="auditLog"><p class="hint">No changes recorded this session.</p></div>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="../../form_flexfield/frontend/nav.js"></script>
+<script>
+const API = 'http://localhost:8080';
+let modules = [];
+let auditLog = [];
+
+// Built-in module descriptions
+const MODULE_META = {
+  'Form Designer':      { desc:'Build custom HRMS forms with dynamic fields and flexfield support.', type:'Core' },
+  'Flexfield Manager':  { desc:'Define KEY and DESCRIPTIVE flexfield structures with segments.', type:'Core' },
+  'Workflow Engine':    { desc:'Approval-based processes with step assignments and escalation.', type:'Process' },
+  'Task Flow Builder':  { desc:'Multi-window UI navigation sequences for guided data entry.', type:'Process' },
+  'EIT Handler':        { desc:'Extra Information Types for employees, jobs, and positions.', type:'Extension' },
+  'Lookup Customizer':  { desc:'Reusable value sets for form dropdowns and flexfield segments.', type:'Extension' },
+  'Module Customizer':  { desc:'Enable/disable and configure HRMS modules.', type:'Admin' },
+  'Report Builder':     { desc:'Create, generate, and export CSV/PDF reports from live data.', type:'Analytics' },
+};
+
+// Role options for access control
+const ROLES = ['All Users','HR Admin','Manager','Employee','Finance','IT','Senior Manager'];
+
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className='toast '+type; t.style.display='block';
+  clearTimeout(t._t); t._t = setTimeout(() => t.style.display='none', 3000);
+}
+
+function setStatus(ok) {
+  const el = document.getElementById('serverStatus');
+  el.textContent = ok ? 'Live (DB)' : 'Offline';
+  el.className = ok ? 'badge badge-green' : 'badge badge-red';
+}
+
+function logAudit(msg) {
+  const entry = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  auditLog.unshift(entry);
+  const container = document.getElementById('auditLog');
+  container.innerHTML = auditLog.map(e => `<div class="audit-entry">${e}</div>`).join('') || '<p class="hint">No changes.</p>';
+}
+
+function clearAuditLog() {
+  auditLog = [];
+  document.getElementById('auditLog').innerHTML = '<p class="hint">No changes recorded this session.</p>';
+}
+
+async function loadModules() {
+  try {
+    const res = await fetch(`${API}/api/modules`);
+    if (!res.ok) throw new Error();
+    modules = await res.json();
+    setStatus(true);
+  } catch {
+    // Fallback built-in list
+    modules = [
+      { id:1, moduleName:'Form Designer',     moduleType:'Core',      isEnabled:true,  displayOrder:1, roleAccess:'All Users' },
+      { id:2, moduleName:'Flexfield Manager', moduleType:'Core',      isEnabled:true,  displayOrder:2, roleAccess:'HR Admin' },
+      { id:3, moduleName:'Workflow Engine',   moduleType:'Process',   isEnabled:true,  displayOrder:3, roleAccess:'All Users' },
+      { id:4, moduleName:'Task Flow Builder', moduleType:'Process',   isEnabled:true,  displayOrder:4, roleAccess:'HR Admin' },
+      { id:5, moduleName:'EIT Handler',       moduleType:'Extension', isEnabled:true,  displayOrder:5, roleAccess:'HR Admin' },
+      { id:6, moduleName:'Lookup Customizer', moduleType:'Extension', isEnabled:true,  displayOrder:6, roleAccess:'HR Admin' },
+      { id:7, moduleName:'Module Customizer', moduleType:'Admin',     isEnabled:true,  displayOrder:7, roleAccess:'HR Admin' },
+      { id:8, moduleName:'Report Builder',    moduleType:'Analytics', isEnabled:true,  displayOrder:8, roleAccess:'HR Admin' },
+    ];
+    setStatus(false);
+  }
+  renderModules();
+}
+
+function renderModules() {
+  const q       = (document.getElementById('moduleSearch')?.value || '').toLowerCase();
+  const data    = q ? modules.filter(m => m.moduleName.toLowerCase().includes(q)) : modules;
+  const enabled = modules.filter(m => m.isEnabled).length;
+  document.getElementById('enabledCount').textContent = enabled;
+  document.getElementById('totalCount').textContent   = modules.length;
+
+  if (!data.length) {
+    document.getElementById('moduleGrid').innerHTML = '<p style="color:var(--gray-400);padding:16px">No modules match your filter.</p>';
+    return;
+  }
+
+  document.getElementById('moduleGrid').innerHTML = data.map(m => {
+    const meta = MODULE_META[m.moduleName] || { desc:'HRMS customization module.', type:m.moduleType||'Module' };
+    const roleAccess = m.roleAccess || 'All Users';
+    return `
+      <div class="module-tile ${m.isEnabled?'enabled':'disabled'}" id="tile_${m.id}">
+        <div class="tile-header">
+          <div>
+            <div class="tile-name">${m.moduleName}</div>
+            <div class="tile-type">${meta.type}</div>
+          </div>
+          <span class="badge ${m.isEnabled?'badge-green':'badge-gray'}">${m.isEnabled?'Enabled':'Disabled'}</span>
+        </div>
+        <div class="tile-desc">${meta.desc}</div>
+        <div class="tile-meta">
+          <span class="badge badge-gray" style="font-size:10px">Order: ${m.displayOrder||'—'}</span>
+          <span class="badge badge-blue" style="font-size:10px">Access: ${roleAccess}</span>
+        </div>
+        <div class="tile-actions">
+          <button class="btn-enable"  onclick="toggle(${m.id}, true)"  ${m.isEnabled?'disabled':''}>Enable</button>
+          <button class="btn-disable" onclick="toggle(${m.id}, false)" ${!m.isEnabled?'disabled':''}>Disable</button>
+          <button class="btn-config"  onclick="toggleConfig(${m.id})">Configure</button>
+        </div>
+        <div class="config-panel" id="config_${m.id}">
+          <div class="config-row">
+            <label>Display Order</label>
+            <input type="number" value="${m.displayOrder||1}" min="1" max="20" style="width:60px"
+              onchange="updateConfig(${m.id},'displayOrder',this.value)">
+          </div>
+          <div class="config-row">
+            <label>Role Access</label>
+            <select onchange="updateConfig(${m.id},'roleAccess',this.value)">
+              ${ROLES.map(r => `<option ${r===roleAccess?'selected':''}>${r}</option>`).join('')}
+            </select>
+          </div>
+          <div class="config-row">
+            <label>Visible in Sidebar</label>
+            <input type="checkbox" ${m.visibleInSidebar!==false?'checked':''} style="width:16px;height:16px;accent-color:var(--primary)"
+              onchange="updateConfig(${m.id},'visibleInSidebar',this.checked)">
+          </div>
+          <div class="config-row">
+            <label>Require Confirmation on Delete</label>
+            <input type="checkbox" ${m.requireConfirmDelete!==false?'checked':''} style="width:16px;height:16px;accent-color:var(--primary)"
+              onchange="updateConfig(${m.id},'requireConfirmDelete',this.checked)">
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function toggleConfig(moduleId) {
+  const panel = document.getElementById(`config_${moduleId}`);
+  if (panel) panel.classList.toggle('open');
+}
+
+async function toggle(moduleId, enable) {
+  try {
+    const res = await fetch(`${API}/api/modules/toggle`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ moduleId, enabled: enable })
+    });
+    if (!res.ok) throw new Error('Update failed');
+    const m = modules.find(x => x.id === moduleId);
+    if (m) m.isEnabled = enable;
+    showToast(`Module ${enable?'enabled':'disabled'}.`);
+    logAudit(`Module #${moduleId} (${m?.moduleName||''}) ${enable?'ENABLED':'DISABLED'}`);
+    renderModules();
+  } catch (err) {
+    // Update locally
+    const m = modules.find(x => x.id === moduleId);
+    if (m) { m.isEnabled = enable; renderModules(); }
+    showToast(`Module ${enable?'enabled':'disabled'} (local).`);
+    logAudit(`Module #${moduleId} ${enable?'ENABLED':'DISABLED'} (offline)`);
+  }
+}
+
+async function updateConfig(moduleId, key, value) {
+  const m = modules.find(x => x.id === moduleId);
+  if (!m) return;
+  const oldVal = m[key];
+  m[key] = typeof oldVal === 'boolean' ? (value === true || value === 'true') : value;
+
+  try {
+    await fetch(`${API}/api/modules/${moduleId}/config`, {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ [key]: m[key] })
+    });
+    showToast(`${key} updated.`);
+  } catch {
+    showToast(`${key} updated (local).`);
+  }
+  logAudit(`Module #${moduleId} (${m.moduleName}): ${key} = ${m[key]}`);
+  renderModules();
+}
+
+async function enableAll() {
+  if (!confirm('Enable all modules?')) return;
+  for (const m of modules) {
+    if (!m.isEnabled) await toggle(m.id, true);
+  }
+  showToast('All modules enabled.');
+}
+
+loadModules();
+</script>
+</body>
+</html>

@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Report Builder — HRMS</title>
+<link rel="stylesheet" href="../../form_flexfield/frontend/style.css">
+<style>
+.report-row { cursor:pointer; transition:background .15s; }
+.report-row:hover td { background:var(--gray-50); }
+.report-row.selected td { background:var(--primary-light); }
+.status-chip { display:inline-block; padding:2px 9px; border-radius:10px; font-size:11px; font-weight:700; }
+.status-generated { background:var(--success-light); color:#15803d; }
+.status-pending    { background:var(--gray-100); color:var(--gray-500); }
+.data-sel-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:8px; margin:10px 0; }
+.data-sel-item { padding:8px 12px; border:1px solid var(--border); border-radius:7px; cursor:pointer; font-size:12px; display:flex; align-items:center; gap:8px; }
+.data-sel-item.selected { border-color:var(--primary); background:var(--primary-light); color:var(--primary); font-weight:600; }
+.data-sel-item input[type="checkbox"] { width:14px; height:14px; accent-color:var(--primary); }
+.export-format-btn { padding:9px 18px; border:2px solid var(--border); border-radius:8px; cursor:pointer; font-size:13px; font-weight:600; background:white; transition:.15s; }
+.export-format-btn.selected { border-color:var(--primary); background:var(--primary-light); color:var(--primary); }
+.export-format-btn.pdf.selected { border-color:#dc2626; background:#fee2e2; color:#dc2626; }
+.preview-table-wrap { overflow-x:auto; max-height:320px; overflow-y:auto; }
+.preview-table-wrap table th { position:sticky; top:0; z-index:1; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="content">
+    <header class="topbar">
+      <div>
+        <h1>Report Builder</h1>
+        <p class="subtext">Create, generate, and export reports from live database tables</p>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <span class="badge badge-green" id="serverStatus">Connecting...</span>
+        <button onclick="openModal()">+ New Report</button>
+      </div>
+    </header>
+
+    <section class="stats">
+      <div class="card"><h3 id="reportCount">0</h3><p>Total Reports</p></div>
+      <div class="card"><h3 id="generatedCount">0</h3><p>Generated</p></div>
+      <div class="card success"><h3>CSV</h3><p>Export Formats</p></div>
+    </section>
+
+    <!-- Reports list -->
+    <div class="panel">
+      <div class="panel-head"><h2>Reports</h2></div>
+      <table>
+        <thead><tr><th>#</th><th>Report Name</th><th>Data Source</th><th>Format</th><th>Schedule</th><th>Status</th></tr></thead>
+        <tbody id="reportTable"><tr><td colspan="6" class="empty-state">Loading...</td></tr></tbody>
+      </table>
+    </div>
+
+    <!-- Action panel (shown on selection) -->
+    <div id="actionPanel" style="display:none" class="panel">
+      <div class="panel-head">
+        <h2 id="selectedName">—</h2>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button onclick="generateReport()">Generate</button>
+          <button onclick="openExportDialog()" style="background:var(--success)">Export</button>
+          <button onclick="deleteReport()" class="btn-danger danger">Delete</button>
+        </div>
+      </div>
+      <div id="previewBox" style="font-size:13px;color:var(--gray-600)">Select a report to preview data.</div>
+    </div>
+  </main>
+</div>
+
+<!-- Create Report Modal -->
+<div class="modal" id="createModal">
+  <div class="modal-box" style="width:500px">
+    <h2>New Report</h2>
+    <div class="form-group">
+      <label>Report Name</label>
+      <input type="text" id="newName" placeholder="e.g. Monthly Headcount">
+    </div>
+    <div class="form-group">
+      <label>Data Source</label>
+      <select id="newSource" onchange="updateSourceHint()">
+        <option value="employees">Employees</option>
+        <option value="performance_cycles">Performance Cycles</option>
+        <option value="appraisals">Appraisals</option>
+        <option value="workflows">Workflows</option>
+        <option value="custom_forms">Custom Forms</option>
+        <option value="custom_fields">Custom Fields</option>
+        <option value="eit_records">EIT Records</option>
+        <option value="lookup_values">Lookup Values</option>
+      </select>
+      <div class="hint" id="sourceHint">Live employee data from hrms.db</div>
+    </div>
+    <div class="form-group">
+      <label>Report Type</label>
+      <select id="newType">
+        <option value="Table">Table</option>
+        <option value="Summary">Summary</option>
+        <option value="Detailed">Detailed</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Schedule</label>
+      <select id="newSchedule">
+        <option value="On-demand">On-demand</option>
+        <option value="Daily">Daily</option>
+        <option value="Weekly">Weekly</option>
+        <option value="Monthly">Monthly</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal('createModal')">Cancel</button>
+      <button onclick="createReport()">Create Report</button>
+    </div>
+  </div>
+</div>
+
+<!-- Export Dialog Modal -->
+<div class="modal" id="exportModal">
+  <div class="modal-box" style="width:540px">
+    <h2>Export Report</h2>
+
+    <div class="form-group">
+      <label>Export Format</label>
+      <div style="display:flex;gap:10px;margin-top:6px">
+        <button class="export-format-btn selected" id="fmtCSV" onclick="selectFormat('CSV')">CSV Spreadsheet</button>
+        <button class="export-format-btn pdf" id="fmtPDF" onclick="selectFormat('PDF')">PDF Document</button>
+      </div>
+    </div>
+
+    <div class="form-group" style="margin-top:14px">
+      <label>Select Data to Include</label>
+      <p class="hint" style="margin-bottom:8px">Choose which columns to include in your export.</p>
+      <div class="data-sel-grid" id="colSelector">
+        <p class="hint">Loading columns...</p>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Row Filter (optional)</label>
+      <select id="rowFilter" style="width:100%">
+        <option value="">All rows</option>
+        <option value="active">Active employees only</option>
+        <option value="onboarding">In onboarding only</option>
+        <option value="engineering">Engineering department</option>
+        <option value="recent">Added in last 30 days</option>
+      </select>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal('exportModal')">Cancel</button>
+      <button id="doExportBtn" onclick="doExport()">Download</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="../../form_flexfield/frontend/nav.js"></script>
+<script>
+const API = 'http://localhost:8080';
+let reports = [], selectedId = null, selectedFormat = 'CSV';
+
+const SOURCE_HINTS = {
+  employees:          'Live employee data from hrms.db',
+  performance_cycles: 'Performance cycles and review periods',
+  appraisals:         'Employee appraisal records and ratings',
+  workflows:          'Workflow definitions and step configurations',
+  custom_forms:       'Custom form definitions and layouts',
+  custom_fields:      'Form fields and flexfield configurations',
+  eit_records:        'Extra Information Type records',
+  lookup_values:      'Lookup codes and their values',
+};
+
+const SOURCE_COLUMNS = {
+  employees:          ['Employee ID','Full Name','Job Title','Department','Status','Start Date','Email'],
+  performance_cycles: ['Cycle ID','Cycle Name','Period','Status','Employee Count'],
+  appraisals:         ['Appraisal ID','Employee ID','Period','Rating','Manager','Status'],
+  workflows:          ['Workflow ID','Name','Assigned To','Steps','Status'],
+  custom_forms:       ['Form ID','Form Name','Layout','Field Count','Module'],
+  custom_fields:      ['Field ID','Field Name','Type','Required','Form ID'],
+  eit_records:        ['EIT ID','Field Name','Data Type','Context','Linked Employee'],
+  lookup_values:      ['Lookup Code','Values','Count'],
+};
+
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className='toast '+type; t.style.display='block';
+  clearTimeout(t._t); t._t = setTimeout(() => t.style.display='none', 3500);
+}
+
+function setStatus(ok) {
+  const el = document.getElementById('serverStatus');
+  el.textContent = ok ? 'Live (DB)' : 'Offline';
+  el.className = ok ? 'badge badge-green' : 'badge badge-red';
+}
+
+function updateSourceHint() {
+  const src = document.getElementById('newSource').value;
+  document.getElementById('sourceHint').textContent = SOURCE_HINTS[src] || '';
+}
+
+async function loadReports() {
+  try {
+    const res = await fetch(`${API}/api/reports`);
+    if (!res.ok) throw new Error();
+    reports = await res.json();
+    setStatus(true);
+  } catch {
+    reports = [];
+    setStatus(false);
+  }
+  renderReports();
+}
+
+function renderReports() {
+  const tbody = document.getElementById('reportTable');
+  document.getElementById('reportCount').innerText    = reports.length;
+  document.getElementById('generatedCount').innerText = reports.filter(r => r.generatedDate || r.status === 'Generated').length;
+
+  if (!reports.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No reports yet. Create one to get started.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = reports.map((r, i) => {
+    const isGenerated = r.generatedDate || r.status === 'Generated';
+    const sel = selectedId === (r.reportId || r.id);
+    return `<tr class="report-row ${sel?'selected':''}" onclick="selectReport(${r.reportId||r.id})">
+      <td>${i+1}</td>
+      <td><strong>${r.reportName}</strong></td>
+      <td>${r.dataSource || r.reportType || 'Table'}</td>
+      <td><span class="badge badge-blue" style="font-size:10px">${r.exportFormat || 'CSV'}</span></td>
+      <td>${r.schedule || 'On-demand'}</td>
+      <td><span class="status-chip ${isGenerated?'status-generated':'status-pending'}">${isGenerated?'Generated':'Pending'}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function selectReport(id) {
+  selectedId = id;
+  const r = reports.find(x => (x.reportId||x.id) === id);
+  if (!r) return;
+  document.getElementById('selectedName').textContent = r.reportName;
+  document.getElementById('actionPanel').style.display = 'block';
+
+  const isGenerated = r.generatedDate || r.status === 'Generated';
+  const cols = SOURCE_COLUMNS[r.dataSource] || SOURCE_COLUMNS['employees'];
+
+  document.getElementById('previewBox').innerHTML = `
+    <div style="margin-bottom:12px">
+      <span style="margin-right:12px"><strong>Source:</strong> ${r.dataSource||r.reportType||'employees'}</span>
+      <span style="margin-right:12px"><strong>Format:</strong> ${r.exportFormat||'CSV'}</span>
+      <span><strong>Schedule:</strong> ${r.schedule||'On-demand'}</span>
+      ${isGenerated ? `<span class="badge badge-green" style="margin-left:12px">Generated ${r.generatedDate||''}</span>` : ''}
+    </div>
+    ${isGenerated ? `
+      <div class="preview-table-wrap">
+        <table>
+          <thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead>
+          <tbody id="previewRows"><tr><td colspan="${cols.length}" class="empty-state">Loading preview...</td></tr></tbody>
+        </table>
+      </div>` : `<p class="hint">Generate this report first to see a data preview.</p>`}`;
+
+  if (isGenerated) loadPreviewRows(r, cols);
+  renderReports();
+}
+
+async function loadPreviewRows(report, cols) {
+  const tbody = document.getElementById('previewRows');
+  if (!tbody) return;
+  try {
+    const src = report.dataSource || 'employees';
+    const endpointMap = {
+      employees: '/api/employees',
+      performance_cycles: '/api/performance/cycles',
+      appraisals: '/api/performance/appraisals',
+      workflows: '/api/workflows',
+      custom_forms: '/api/forms',
+      custom_fields: '/api/flexfields',
+      eit_records: '/api/eit',
+      lookup_values: '/api/lookups',
+    };
+    const ep = endpointMap[src] || '/api/employees';
+    const res = await fetch(`${API}${ep}`);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    const rows = data.slice(0, 10);
+
+    tbody.innerHTML = rows.map(row => {
+      return `<tr>${cols.map(col => {
+        const key = col.toLowerCase().replace(/ /g,'').replace(/id$/i,'Id');
+        const altKey = col.toLowerCase().replace(/ /g,'_');
+        const val = row[key] || row[altKey] || row[col] || '—';
+        return `<td>${Array.isArray(val) ? val.join(', ') : val}</td>`;
+      }).join('')}</tr>`;
+    }).join('') || `<tr><td colspan="${cols.length}" class="empty-state">No data available.</td></tr>`;
+  } catch {
+    tbody.innerHTML = `<tr><td colspan="${cols.length}" class="empty-state">Preview unavailable.</td></tr>`;
+  }
+}
+
+async function generateReport() {
+  if (!selectedId) { showToast('Select a report first.', 'error'); return; }
+  try {
+    const res = await fetch(`${API}/api/reports/${selectedId}/generate`, { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
+    if (!res.ok) throw new Error('Generate failed');
+    showToast('Report generated successfully.');
+    await loadReports();
+    selectReport(selectedId);
+  } catch (err) {
+    showToast(err.message || 'Generate failed. Is the server running?', 'error');
+  }
+}
+
+/* ── Export dialog ── */
+function openExportDialog() {
+  if (!selectedId) { showToast('Select a report first.', 'error'); return; }
+  const r = reports.find(x => (x.reportId||x.id) === selectedId);
+  if (!r) return;
+
+  // Populate column selector
+  const cols = SOURCE_COLUMNS[r.dataSource] || SOURCE_COLUMNS['employees'];
+  const colSel = document.getElementById('colSelector');
+  colSel.innerHTML = cols.map(c => `
+    <label class="data-sel-item selected" id="col_${c.replace(/\s/g,'_')}">
+      <input type="checkbox" checked value="${c}" onchange="toggleCol(this, '${c.replace(/\s/g,'_')}')" style="width:14px;height:14px">
+      ${c}
+    </label>`).join('');
+
+  selectFormat('CSV');
+  const m = document.getElementById('exportModal');
+  m.style.visibility='visible'; m.style.opacity='1'; m.style.pointerEvents='auto';
+}
+
+function selectFormat(fmt) {
+  selectedFormat = fmt;
+  document.getElementById('fmtCSV').className = 'export-format-btn' + (fmt==='CSV'?' selected':'');
+  document.getElementById('fmtPDF').className = 'export-format-btn pdf' + (fmt==='PDF'?' selected':'');
+  document.getElementById('doExportBtn').textContent = `Download ${fmt}`;
+}
+
+function toggleCol(cb, id) {
+  const lbl = document.getElementById(`col_${id}`);
+  if (lbl) lbl.className = 'data-sel-item' + (cb.checked ? ' selected' : '');
+}
+
+async function doExport() {
+  if (!selectedId) return;
+  const r = reports.find(x => (x.reportId||x.id) === selectedId);
+
+  // Gather selected columns
+  const selectedCols = Array.from(document.querySelectorAll('#colSelector input:checked')).map(cb => cb.value);
+  if (!selectedCols.length) { showToast('Select at least one column.', 'error'); return; }
+
+  const rowFilter = document.getElementById('rowFilter').value;
+  closeModal('exportModal');
+  showToast(`Preparing ${selectedFormat} export...`);
+
+  try {
+    // Try server export endpoint
+    const url = new URL(`${API}/api/reports/${selectedId}/export`);
+    url.searchParams.set('format', selectedFormat);
+    if (rowFilter) url.searchParams.set('filter', rowFilter);
+    url.searchParams.set('columns', selectedCols.join(','));
+
+    const res = await fetch(url.toString());
+    if (!res.ok) throw new Error('Export failed');
+
+    const blob = await res.blob();
+    downloadBlob(blob, r, selectedFormat);
+    showToast(`${selectedFormat} export downloaded.`);
+  } catch {
+    // Client-side fallback: generate CSV/PDF from preview data
+    await generateClientSideExport(r, selectedCols, rowFilter, selectedFormat);
+  }
+}
+
+async function generateClientSideExport(report, cols, filter, fmt) {
+  try {
+    const src = report.dataSource || 'employees';
+    const endpointMap = {
+      employees: '/api/employees',
+      performance_cycles: '/api/performance/cycles',
+      appraisals: '/api/performance/appraisals',
+      workflows: '/api/workflows',
+      custom_forms: '/api/forms',
+      eit_records: '/api/eit',
+      lookup_values: '/api/lookups',
+    };
+    const ep = endpointMap[src] || '/api/employees';
+    const res = await fetch(`${API}${ep}`);
+    let rows = res.ok ? await res.json() : [];
+
+    // Apply filter
+    if (filter === 'active')      rows = rows.filter(r => (r.status||r.onboardingStage||'').toLowerCase()==='active');
+    if (filter === 'onboarding')  rows = rows.filter(r => ['orientation','probation','pre-joining'].includes((r.status||r.onboardingStage||'').toLowerCase()));
+    if (filter === 'engineering') rows = rows.filter(r => (r.department||'').toLowerCase()==='engineering');
+
+    if (fmt === 'CSV') {
+      let csv = cols.join(',') + '\n';
+      csv += rows.map(row => cols.map(col => {
+        const key = col.toLowerCase().replace(/ /g,'').replace(/id$/,'Id');
+        const altKey = col.toLowerCase().replace(/ /g,'_');
+        const v = row[key] || row[altKey] || row[col] || '';
+        const str = Array.isArray(v) ? v.join(';') : String(v);
+        return `"${str.replace(/"/g,'""')}"`;
+      }).join(',')).join('\n');
+
+      const blob = new Blob([csv], { type:'text/csv' });
+      downloadBlob(blob, report, 'CSV');
+      showToast('CSV downloaded.');
+    } else {
+      // Simple HTML-based PDF
+      const htmlContent = `
+        <!DOCTYPE html><html><head><meta charset="UTF-8">
+        <title>${report.reportName}</title>
+        <style>
+          body{font-family:Arial,sans-serif;padding:24px;font-size:12px}
+          h1{font-size:18px;margin-bottom:4px}
+          p{color:#6b7280;margin-bottom:16px}
+          table{width:100%;border-collapse:collapse}
+          th{background:#f3f4f6;padding:8px;text-align:left;border:1px solid #e5e7eb;font-size:11px}
+          td{padding:7px 8px;border:1px solid #e5e7eb}
+          tr:nth-child(even) td{background:#f9fafb}
+        </style></head><body>
+        <h1>${report.reportName}</h1>
+        <p>Generated: ${new Date().toLocaleString()} | Source: ${report.dataSource||'employees'} | Rows: ${rows.length}</p>
+        <table>
+          <thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead>
+          <tbody>
+            ${rows.map(row => `<tr>${cols.map(col => {
+              const key = col.toLowerCase().replace(/ /g,'').replace(/id$/,'Id');
+              const altKey = col.toLowerCase().replace(/ /g,'_');
+              const v = row[key] || row[altKey] || row[col] || '—';
+              return `<td>${Array.isArray(v)?v.join(', '):v}</td>`;
+            }).join('')}</tr>`).join('')}
+          </tbody>
+        </table>
+        </body></html>`;
+
+      const printWin = window.open('','_blank');
+      printWin.document.write(htmlContent);
+      printWin.document.close();
+      printWin.onload = () => { printWin.print(); };
+      showToast('PDF ready — use browser print dialog to save.');
+    }
+  } catch (err) {
+    showToast('Export error: ' + err.message, 'error');
+  }
+}
+
+function downloadBlob(blob, report, fmt) {
+  const ext = fmt === 'PDF' ? '.pdf' : '.csv';
+  const name = (report.reportName || 'report').replace(/[^a-zA-Z0-9_\-]/g,'_') + ext;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+async function deleteReport() {
+  if (!selectedId) return;
+  const r = reports.find(x => (x.reportId||x.id) === selectedId);
+  if (!confirm(`Delete report "${r?.reportName}"?`)) return;
+  try {
+    const res = await fetch(`${API}/api/reports/${selectedId}/delete`, { method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({reportId:selectedId}) });
+    if (!res.ok) throw new Error();
+    showToast('Report deleted.');
+    selectedId = null;
+    document.getElementById('actionPanel').style.display = 'none';
+    await loadReports();
+  } catch {
+    showToast('Delete failed.', 'error');
+  }
+}
+
+async function createReport() {
+  const name     = document.getElementById('newName').value.trim();
+  const source   = document.getElementById('newSource').value;
+  const type     = document.getElementById('newType').value;
+  const schedule = document.getElementById('newSchedule').value;
+
+  if (!name) { showToast('Enter a report name.', 'error'); return; }
+  if (reports.some(r => r.reportName?.toLowerCase() === name.toLowerCase())) {
+    showToast(`Report "${name}" already exists.`, 'error'); return;
+  }
+
+  try {
+    const res = await fetch(`${API}/api/reports/create`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ reportName:name, dataSource:source, reportType:type, schedule, exportFormat:'CSV' })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Create failed');
+    showToast(`Report "${name}" created.`);
+    closeModal('createModal');
+    document.getElementById('newName').value = '';
+    await loadReports();
+    selectReport(data.reportId || data.id);
+  } catch (err) {
+    showToast(err.message || 'Create failed.', 'error');
+  }
+}
+
+function openModal() {
+  const m = document.getElementById('createModal');
+  m.style.visibility='visible'; m.style.opacity='1'; m.style.pointerEvents='auto';
+  document.getElementById('newName').focus();
+}
+function closeModal(id) {
+  const m = document.getElementById(id);
+  m.style.visibility='hidden'; m.style.opacity='0'; m.style.pointerEvents='none';
+}
+
+document.querySelectorAll('.modal').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) closeModal(m.id); });
+});
+
+loadReports();
+</script>
+</body>
+</html>

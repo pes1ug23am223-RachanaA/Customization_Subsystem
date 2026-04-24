@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>HRMS Customization Dashboard</title>
+<link rel="stylesheet" href="../../form_flexfield/frontend/style.css">
+<style>
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;margin-top:20px}
+.module-card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px;text-decoration:none;color:#1f2937;transition:all .2s;display:block}
+.module-card:hover{border-color:#6366f1;box-shadow:0 4px 12px rgba(99,102,241,.15);transform:translateY(-2px)}
+.card-icon{font-size:28px;margin-bottom:10px}
+.card-title{font-size:14px;font-weight:700;margin-bottom:4px}
+.card-desc{font-size:12px;color:#6b7280}
+.card-table{font-size:10px;color:#9ca3af;margin-top:8px;font-family:monospace;background:#f9fafb;padding:4px 8px;border-radius:4px}
+.section-title{font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin:24px 0 10px}
+.status-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.dot{width:8px;height:8px;border-radius:50%;background:#22c55e}
+.dot.red{background:#ef4444}
+.checks-panel{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:18px;margin-top:20px}
+.checks-panel p{font-size:13px;color:#374151;line-height:1.7;margin:0}
+.checks-panel code{background:#f3f4f6;padding:1px 6px;border-radius:4px}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-logo"><h2>HRMS</h2><span>Customization Subsystem</span></div>
+    <div class="sidebar-section">Customization Modules</div>
+    <a href="../../form_flexfield/frontend/forms.html">Form Designer</a>
+    <a href="../../form_flexfield/frontend/flexfields.html">Flexfield Manager</a>
+    <a href="../../workflow_taskflow/frontend/workflow.html">Workflow Engine</a>
+    <a href="../../workflow_taskflow/frontend/taskflow.html">Task Flow Builder</a>
+    <a href="../../eit_lookup/frontend/eit.html">EIT Handler</a>
+    <a href="../../eit_lookup/frontend/lookup.html">Lookup Customizer</a>
+    <a href="../../module_report/frontend/module_customizer.html">Module Customizer</a>
+    <a href="../../module_report/frontend/report_builder.html">Report Builder</a>
+    <div class="sidebar-section">Integrations</div>
+    <a href="employee_onboarding.html">Onboarding</a>
+    <a href="performance_management.html">Performance Mgmt</a>
+    <a href="customization.html" class="active">Dashboard</a>
+  </aside>
+  <main class="content">
+    <div class="topbar">
+      <div><h1>Customization Dashboard</h1><p class="subtext">All 8 modules connected to hrms.db</p></div>
+      <span class="badge badge-green" id="serverStatus">Connecting</span>
+    </div>
+
+    <section class="stats">
+      <div class="card"><h3 id="moduleCount">8</h3><p>Modules</p></div>
+      <div class="card"><h3 id="wfCount"></h3><p>Workflows</p></div>
+      <div class="card"><h3 id="tfCount"></h3><p>Task Flows</p></div>
+      <div class="card success"><h3>DB</h3><p>hrms.db</p></div>
+    </section>
+
+    <div class="section-title">Customization Modules</div>
+    <div class="grid">
+      <a class="module-card" href="../../form_flexfield/frontend/forms.html">
+        <div class="card-icon"></div>
+        <div class="card-title">Form Designer</div>
+        <div class="card-desc">Create and manage customizable HR forms with real field definitions</div>
+        <div class="card-table">custom_forms + custom_fields</div>
+      </a>
+      <a class="module-card" href="../../form_flexfield/frontend/flexfields.html">
+        <div class="card-icon"></div>
+        <div class="card-title">Flexfield Manager</div>
+        <div class="card-desc">Define reusable KEY and DESCRIPTIVE flexfield structures</div>
+        <div class="card-table">custom_fields (form_id IS NULL)</div>
+      </a>
+      <a class="module-card" href="../../workflow_taskflow/frontend/workflow.html">
+        <div class="card-icon"></div>
+        <div class="card-title">Workflow Engine</div>
+        <div class="card-desc">Design approval workflows with multi-step escalation rules</div>
+        <div class="card-table">workflows + workflow_steps</div>
+      </a>
+      <a class="module-card" href="../../workflow_taskflow/frontend/taskflow.html">
+        <div class="card-icon"></div>
+        <div class="card-title">Task Flow Builder</div>
+        <div class="card-desc">Build sequential task flows with window sequencing</div>
+        <div class="card-table">task_flows + task_flow_windows</div>
+      </a>
+      <a class="module-card" href="../../eit_lookup/frontend/eit.html">
+        <div class="card-icon"></div>
+        <div class="card-title">EIT Handler</div>
+        <div class="card-desc">Manage Extra Information Types for employees and jobs</div>
+        <div class="card-table">custom_fields (form_id = -1)</div>
+      </a>
+      <a class="module-card" href="../../eit_lookup/frontend/lookup.html">
+        <div class="card-icon"></div>
+        <div class="card-title">Lookup Customizer</div>
+        <div class="card-desc">Define reusable value sets for dropdowns and forms</div>
+        <div class="card-table">custom_fields (form_id = -2)</div>
+      </a>
+      <a class="module-card" href="../../module_report/frontend/module_customizer.html">
+        <div class="card-icon"></div>
+        <div class="card-title">Module Customizer</div>
+        <div class="card-desc">Enable or disable HRMS modules persists to database</div>
+        <div class="card-table">custom_modules</div>
+      </a>
+      <a class="module-card" href="../../module_report/frontend/report_builder.html">
+        <div class="card-icon"></div>
+        <div class="card-title">Report Builder</div>
+        <div class="card-desc">Create and download real CSV reports from live employee data</div>
+        <div class="card-table">hr_reports</div>
+      </a>
+    </div>
+
+    <div class="section-title">Subsystem Integrations</div>
+    <div class="grid">
+      <a class="module-card" href="employee_onboarding.html">
+        <div class="card-icon"></div>
+        <div class="card-title">Onboarding & Offboarding</div>
+        <div class="card-desc">IEmployeeDataProvider + IEmployeeIntegration trigger workflows</div>
+        <div class="card-table">employees table</div>
+      </a>
+      <a class="module-card" href="performance_management.html">
+        <div class="card-icon"></div>
+        <div class="card-title">Performance Management</div>
+        <div class="card-desc">IPerformanceForCustomization cycles, goals, appraisals</div>
+        <div class="card-table">goals + appraisals tables</div>
+      </a>
+    </div>
+
+    <div class="checks-panel">
+      <div class="section-title" style="margin-top:0">Runtime Design Checks</div>
+      <p id="runtimeChecks">Loading architecture checks</p>
+    </div>
+  </main>
+</div>
+
+<script>
+async function loadStats() {
+  try {
+    const [health, wfs, tfs, checks] = await Promise.all([
+      fetch('http://localhost:8080/api/health').then(r => r.json()),
+      fetch('http://localhost:8080/api/workflows').then(r => r.json()),
+      fetch('http://localhost:8080/api/taskflows').then(r => r.json()),
+      fetch('http://localhost:8080/api/checks').then(r => r.json())
+    ]);
+    document.getElementById('serverStatus').textContent = 'Live (DB Connected)';
+    document.getElementById('serverStatus').className = 'badge badge-green';
+    document.getElementById('wfCount').textContent = wfs.length;
+    document.getElementById('tfCount').textContent = tfs.length;
+    document.getElementById('runtimeChecks').innerHTML =
+      `DB access: <code>${checks.dbAccess}</code><br>
+       Exception API: <code>${checks.exceptionApi}</code><br>
+       Patterns: <code>${checks.patterns.creational}</code>, <code>${checks.patterns.structural}</code>, <code>${checks.patterns.behavioral}</code><br>
+       GRASP: <code>${checks.grasp.join(', ')}</code><br>
+       SOLID: <code>${checks.solid.join(', ')}</code>`;
+  } catch {
+    document.getElementById('serverStatus').textContent = 'Server Offline';
+    document.getElementById('serverStatus').className = 'badge badge-red';
+    document.getElementById('wfCount').textContent = '';
+    document.getElementById('tfCount').textContent = '';
+    document.getElementById('runtimeChecks').textContent = 'Architecture checks are unavailable because the ApiServer is offline.';
+  }
+}
+loadStats();
+</script>
+</body>
+</html>

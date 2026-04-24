@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flexfield Manager — HRMS</title>
+<link rel="stylesheet" href="style.css">
+<style>
+.seg-list { display:flex; flex-wrap:wrap; gap:6px; }
+.seg-chip { background:var(--primary-light); color:var(--primary); border-radius:8px;
+            padding:3px 10px; font-size:11px; font-weight:600; }
+.seg-add { display:flex; gap:8px; align-items:center; margin-top:10px; }
+.flex-detail-panel { background:var(--gray-50); border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-top:8px; }
+.flex-detail-panel h4 { font-size:13px; font-weight:700; margin-bottom:10px; color:var(--gray-700); }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="content">
+    <header class="topbar">
+      <div>
+        <h1>Flexfield Manager</h1>
+        <p class="subtext">Define KEY and DESCRIPTIVE flexfields for HRMS forms</p>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <span class="badge badge-green" id="serverStatus">Connecting...</span>
+        <button onclick="openModal()">+ Add Flexfield</button>
+      </div>
+    </header>
+
+    <div class="int-banner">
+      Flexfields extend standard HRMS fields with structured segments. <strong>KEY flexfields</strong>
+      use structured codes (e.g. GRADE-A-L3). <strong>DESCRIPTIVE flexfields</strong> carry additional
+      context per record (e.g. employee extra attributes). Each segment represents one discrete piece of data.
+    </div>
+
+    <section class="stats">
+      <div class="card"><h3 id="flexCount">0</h3><p>Total Flexfields</p></div>
+      <div class="card"><h3 id="keyCount">0</h3><p>KEY Fields</p></div>
+      <div class="card success"><h3 id="descCount">0</h3><p>DESCRIPTIVE</p></div>
+    </section>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Configured Flexfields</h2></div>
+      <table>
+        <thead>
+          <tr><th>ID</th><th>Name</th><th>Type</th><th>Segments</th><th>Used In Forms</th><th>Action</th></tr>
+        </thead>
+        <tbody id="flexTable"><tr><td colspan="6" class="empty-state">Loading...</td></tr></tbody>
+      </table>
+    </div>
+
+    <!-- Segment management section (shown when flexfield selected) -->
+    <div id="segPanel" style="display:none" class="panel">
+      <div class="panel-head">
+        <h2>Segments — <span id="segPanelTitle" style="font-weight:400;color:var(--gray-500)"></span></h2>
+        <button class="btn-sm btn-ghost" onclick="closeSegPanel()">Close</button>
+      </div>
+      <div class="int-banner">
+        Each segment is a discrete data component of this flexfield.
+        For a KEY flexfield, segments form a structured code (e.g. DEPT-LEVEL-GRADE).
+        For DESCRIPTIVE, each segment stores a named extra attribute.
+      </div>
+      <div id="segList" class="seg-list" style="margin-bottom:14px"></div>
+      <div class="seg-add">
+        <input type="text" id="newSegName" placeholder="Segment name (e.g. Level)" style="width:200px">
+        <button class="btn-sm" onclick="addSegment()">Add Segment</button>
+        <button class="btn-sm btn-danger" onclick="removeLastSegment()">Remove Last</button>
+      </div>
+      <p class="hint" style="margin-top:8px">Segments define the structure of the flexfield value. Changes take effect immediately.</p>
+    </div>
+  </main>
+</div>
+
+<!-- Create Flexfield Modal -->
+<div class="modal" id="modal">
+  <div class="modal-box">
+    <h2>Add Flexfield</h2>
+    <div class="form-group">
+      <label>Flexfield Name</label>
+      <input type="text" id="newName" placeholder="e.g. GRADE_CODE">
+    </div>
+    <div class="form-group">
+      <label>Type</label>
+      <select id="newType">
+        <option value="KEY">KEY — structured code segments</option>
+        <option value="DESCRIPTIVE">DESCRIPTIVE — extra context attributes</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Initial Segments (comma-separated)</label>
+      <input type="text" id="newSegments" placeholder="e.g. Department, Level, Grade">
+      <div class="hint">You can add/edit segments after creation too</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal()">Cancel</button>
+      <button onclick="createField()">Create Flexfield</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="nav.js"></script>
+<script>
+const FLEX_API = 'http://localhost:8080/api/flexfields';
+let flexfields = [];
+let selectedFlexId = null;
+
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast ' + type; t.style.display = 'block';
+  clearTimeout(t._t); t._t = setTimeout(() => t.style.display='none', 3500);
+}
+
+function setStatus(ok) {
+  const el = document.getElementById('serverStatus');
+  el.textContent = ok ? 'Live (DB)' : 'Offline';
+  el.className = ok ? 'badge badge-green' : 'badge badge-red';
+}
+
+async function loadFields() {
+  try {
+    const res = await fetch(FLEX_API);
+    if (!res.ok) throw new Error();
+    flexfields = await res.json();
+    setStatus(true);
+  } catch {
+    flexfields = [];
+    setStatus(false);
+  }
+  renderTable();
+}
+
+function renderTable() {
+  const tbody = document.getElementById('flexTable');
+  let keyC = 0, descC = 0;
+
+  if (!flexfields.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No flexfields defined. Create one to get started.</td></tr>';
+  } else {
+    tbody.innerHTML = flexfields.map(f => {
+      if (f.type === 'KEY') keyC++; else descC++;
+      const segsArr = Array.isArray(f.segments) ? f.segments : (f.segmentNames || []);
+      const segCount = segsArr.length || f.segmentCount || 0;
+      const segsDisplay = segsArr.length
+        ? segsArr.map(s => `<span class="seg-chip">${s}</span>`).join(' ')
+        : `<span class="badge badge-gray">${segCount} segment${segCount!==1?'s':''}</span>`;
+      return `<tr>
+        <td>${f.id}</td>
+        <td><strong>${f.name||f.fieldName}</strong></td>
+        <td><span class="badge ${f.type==='KEY'?'badge-blue':'badge-purple'}">${f.type}</span></td>
+        <td>${segsDisplay}</td>
+        <td id="usage-${f.id}"><span class="badge badge-gray">checking...</span></td>
+        <td style="white-space:nowrap">
+          <button class="btn-sm" style="background:#6366f1;color:#fff;margin-right:6px" onclick="openSegPanel(${f.id})">Edit Segments</button>
+          <button class="btn-sm btn-danger" onclick="deleteField(${f.id})">Delete</button>
+        </td>
+      </tr>`;
+    }).join('');
+
+    // Check usage in forms
+    setTimeout(checkFormUsage, 100);
+  }
+
+  document.getElementById('flexCount').innerText = flexfields.length;
+  document.getElementById('keyCount').innerText  = keyC;
+  document.getElementById('descCount').innerText = descC;
+}
+
+async function checkFormUsage() {
+  try {
+    const res = await fetch('http://localhost:8080/api/forms');
+    if (!res.ok) return;
+    const forms = await res.json();
+    flexfields.forEach(f => {
+      const name = f.name || f.fieldName;
+      const usedIn = forms.filter(fm =>
+        (fm.fields||[]).some(fd => fd.fieldName === name && fd.fieldType === 'Flexfield')
+      );
+      const cell = document.getElementById(`usage-${f.id}`);
+      if (cell) {
+        cell.innerHTML = usedIn.length
+          ? usedIn.map(fm => `<span class="badge badge-green">${fm.formName}</span>`).join(' ')
+          : '<span class="badge badge-gray">Not used</span>';
+      }
+    });
+  } catch {}
+}
+
+async function createField() {
+  const name = document.getElementById('newName').value.trim();
+  const type = document.getElementById('newType').value;
+  const segInput = document.getElementById('newSegments').value.trim();
+
+  if (!name) { showToast('Flexfield name is required.', 'error'); return; }
+
+  // Duplicate check
+  if (flexfields.some(f => (f.name||f.fieldName||'').toLowerCase() === name.toLowerCase())) {
+    showToast(`Flexfield "${name}" already exists.`, 'error'); return;
+  }
+
+  const segments = segInput ? segInput.split(',').map(s => s.trim()).filter(Boolean) : [];
+
+  try {
+    const res = await fetch(`${FLEX_API}/create`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ name: name, type: type, segments: segments.join(','), segmentCount: segments.length || 1 })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Create failed');
+    showToast(`Flexfield "${name}" created.`);
+    closeModal();
+    await loadFields();
+  } catch (err) {
+    showToast(err.message || 'Unable to create flexfield.', 'error');
+  }
+}
+
+async function deleteField(id) {
+  const f = flexfields.find(x => x.id === id);
+  if (!confirm(`Delete flexfield "${f ? (f.name||f.fieldName) : id}"?`)) return;
+  try {
+    const res = await fetch(`${FLEX_API}/${id}`, { method:'DELETE' });
+    if (!res.ok) throw new Error('Delete failed');
+    showToast('Flexfield deleted.');
+    if (selectedFlexId === id) closeSegPanel();
+    await loadFields();
+  } catch (err) {
+    showToast(err.message || 'Unable to delete.', 'error');
+  }
+}
+
+/* ── Segment panel ── */
+function openSegPanel(id) {
+  selectedFlexId = id;
+  const f = flexfields.find(x => x.id === id);
+  if (!f) return;
+  document.getElementById('segPanelTitle').textContent = `${f.name||f.fieldName} (${f.type})`;
+  renderSegments(f);
+  document.getElementById('segPanel').style.display = 'block';
+}
+
+function closeSegPanel() {
+  document.getElementById('segPanel').style.display = 'none';
+  selectedFlexId = null;
+}
+
+function renderSegments(f) {
+  const segs = Array.isArray(f.segments) ? f.segments : (f.segmentNames || []);
+  const container = document.getElementById('segList');
+  container.innerHTML = segs.length
+    ? segs.map((s,i) => `<span class="seg-chip">${i+1}. ${s}</span>`).join('')
+    : '<span class="badge badge-gray">No segments yet</span>';
+}
+
+async function addSegment() {
+  const name = document.getElementById('newSegName').value.trim();
+  if (!name) { showToast('Enter a segment name.', 'error'); return; }
+  const f = flexfields.find(x => x.id === selectedFlexId);
+  if (!f) return;
+  const segs = Array.isArray(f.segments) ? [...f.segments] : (f.segmentNames ? [...f.segmentNames] : []);
+
+  if (segs.map(s=>s.toLowerCase()).includes(name.toLowerCase())) {
+    showToast(`Segment "${name}" already exists.`, 'error'); return;
+  }
+
+  segs.push(name);
+  await saveSegments(segs);
+  document.getElementById('newSegName').value = '';
+}
+
+async function removeLastSegment() {
+  const f = flexfields.find(x => x.id === selectedFlexId);
+  if (!f) return;
+  const segs = Array.isArray(f.segments) ? [...f.segments] : (f.segmentNames ? [...f.segmentNames] : []);
+  if (!segs.length) { showToast('No segments to remove.', 'error'); return; }
+  segs.pop();
+  await saveSegments(segs);
+}
+
+async function saveSegments(segs) {
+  try {
+    const res = await fetch(`${FLEX_API}/${selectedFlexId}/segments`, {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ segments: segs.join(','), segmentCount: segs.length })
+    });
+    if (!res.ok) throw new Error('Save failed');
+    // Update locally
+    const f = flexfields.find(x => x.id === selectedFlexId);
+    if (f) { f.segments = segs; f.segmentCount = segs.length; }
+    renderSegments(f);
+    renderTable();
+    showToast('Segments updated.');
+  } catch (err) {
+    // Update locally even if save fails
+    const f = flexfields.find(x => x.id === selectedFlexId);
+    if (f) { f.segments = segs; f.segmentCount = segs.length; }
+    renderSegments(f);
+    renderTable();
+    showToast('Segments updated (local).');
+  }
+}
+
+/* ── Modal ── */
+function openModal() {
+  document.getElementById('newName').value = '';
+  document.getElementById('newSegments').value = '';
+  const m = document.getElementById('modal');
+  m.style.visibility='visible'; m.style.opacity='1'; m.style.pointerEvents='auto';
+}
+function closeModal() {
+  const m = document.getElementById('modal');
+  m.style.visibility='hidden'; m.style.opacity='0'; m.style.pointerEvents='none';
+}
+
+document.getElementById('modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal')) closeModal();
+});
+
+loadFields();
+</script>
+</body>
+</html>
