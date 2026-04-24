@@ -18,6 +18,7 @@
 12. [File Reference](#12-file-reference)
 13. [How to Run](#13-how-to-run)
 14. [API Reference](#14-api-reference)
+15. [Contributors](#15-Contributors)
 
 ---
 
@@ -660,7 +661,7 @@ Open any HTML file directly in a browser:
 *HRMS Customization Subsystem — Code Crafters, Section D*
 *Course: Object-Oriented Analysis and Design*
 
-### Contributors 
+## 15. Contributors 
 - Rachana A - PES1UG23AM223
 - Rakshitha M - PES1UG23AM231
 - Raksha - PES1UG23AM229
