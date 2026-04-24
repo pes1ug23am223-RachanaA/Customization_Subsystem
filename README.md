@@ -659,3 +659,9 @@ Open any HTML file directly in a browser:
 
 *HRMS Customization Subsystem — Code Crafters, Section D*
 *Course: Object-Oriented Analysis and Design*
+
+### Contributors 
+- Rachana A - PES1UG23AM223
+- Rakshitha M - PES1UG23AM231
+- Raksha - PES1UG23AM229
+- Neha PM - PES1UG23AM183
